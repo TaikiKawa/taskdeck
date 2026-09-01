@@ -28,7 +28,7 @@ server.tool(
       .array(
         z.object({
           title: z.string().describe("Short imperative task title"),
-          notes: z.string().optional().describe("Details, context, file paths (Markdown supported in the UI)"),
+          notes: z.string().optional().describe("Details, context, file paths. Markdown is rendered in the UI; tasks edited in the UI may store notes as simple HTML"),
           status: statusEnum.optional().describe("Defaults to 'todo'"),
           priority: priorityEnum.optional().describe("Priority badge; '' (default) means none"),
         })

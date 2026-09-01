@@ -145,11 +145,14 @@
   .props .prop-label { font-size: 12px; color: var(--muted); }
   .notes-head { font-size: 12px; color: var(--muted); margin: 0 0 6px; }
   .notes-view {
-    min-height: 140px; font-size: 14px; line-height: 1.65; cursor: text;
-    border-radius: 8px; padding: 4px 2px; word-break: break-word;
+    min-height: 200px; font-size: 14px; line-height: 1.65; cursor: text;
+    border-radius: 8px; padding: 6px 4px; word-break: break-word; outline: none;
+    caret-color: var(--accent);
   }
-  .notes-view:hover { background: color-mix(in srgb, var(--accent-soft) 55%, transparent); }
-  .notes-view .placeholder { color: var(--muted); }
+  .notes-view:empty::before {
+    content: "メモを書く…（Notionと同じ感覚でそのまま入力）";
+    color: var(--muted); pointer-events: none;
+  }
   .notes-view h1 { font-size: 20px; margin: 14px 0 6px; }
   .notes-view h2 { font-size: 17px; margin: 12px 0 5px; }
   .notes-view h3 { font-size: 15px; margin: 10px 0 4px; }
@@ -160,15 +163,28 @@
     background: var(--accent-soft); border-radius: 4px; padding: 1px 5px;
     font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 12.5px;
   }
-  .notes-view a { color: var(--accent); }
-  .notes-view .md-gap { height: 10px; }
-  .notes-edit {
-    width: 100%; min-height: 220px; background: var(--bg); color: var(--text);
-    border: 1px solid var(--accent); border-radius: 8px; padding: 10px 12px;
-    font-size: 13.5px; font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
-    line-height: 1.6; outline: none; resize: vertical;
+  .notes-view a { color: var(--accent); cursor: pointer; }
+  .notes-view a:hover { text-decoration: underline; }
+  .notes-view a.link-card {
+    display: block; border: 1px solid var(--border); border-radius: 8px;
+    padding: 8px 12px; margin: 6px 0; text-decoration: none;
+    background: var(--bg); overflow: hidden; text-overflow: ellipsis;
+    white-space: nowrap;
   }
-  .notes-hint { font-size: 11px; color: var(--muted); margin-top: 6px; }
+  .notes-view a.link-card:hover { border-color: var(--accent); text-decoration: none; }
+  .notes-view blockquote {
+    margin: 4px 0; padding: 2px 0 2px 12px;
+    border-left: 3px solid var(--border); color: var(--muted);
+  }
+  .notes-view .md-gap { height: 10px; }
+  .notes-hint { font-size: 11px; color: var(--muted); margin-top: 10px; line-height: 1.6; }
+  #linkPopup {
+    position: fixed; z-index: 70; background: var(--panel);
+    border: 1px solid var(--border); border-radius: 10px; padding: 8px;
+    box-shadow: 0 8px 30px rgba(0,0,0,.3);
+  }
+  #linkPopup[hidden] { display: none; }
+  #linkPopup input { width: 280px; }
 
   /* ---- カードの … メニュー ---- */
   #cardMenu {
@@ -278,13 +294,15 @@
       <span class="prop-label">グループ</span>
       <input id="propProject" type="text">
     </div>
-    <div class="notes-head">メモ（クリックで編集）</div>
-    <div id="notesView" class="notes-view"></div>
-    <textarea id="notesEdit" class="notes-edit" hidden
-      placeholder="メモを書く…"></textarea>
-    <div class="notes-hint" id="notesHint" hidden># 見出し / **太字** / *斜体* / `コード` / - リスト / [リンク](URL)。⌘+Enter か外側クリックで保存、Esc で取り消し</div>
+    <div class="notes-head">メモ</div>
+    <div id="notesEditor" class="notes-view" contenteditable="true" spellcheck="false"></div>
+    <div class="notes-hint">「# 」「- 」「1. 」で見出し・リスト、**太字**・*斜体*・`コード` は入力で変換。⌘B 太字 / ⌘I 斜体 / ⌘E コード / ⌘⇧S 打ち消し / ⌘K リンク / ⌘⌥1〜3 見出し / ⌘⌥0 本文。URL貼り付けでリンク、リンクはクリックで開く</div>
   </div>
 </aside>
+</div>
+
+<div id="linkPopup" hidden>
+  <input id="linkInput" type="text" placeholder="URLを入力して Enter" autocomplete="off">
 </div>
 
 <div id="cardMenu" hidden>
@@ -440,6 +458,15 @@ function mdRender(text) {
 function mdPlain(s) {
   return s.replace(/\[([^\]]+)\]\([^)]*\)/g, "$1").replace(/[#*`]/g, "").trim();
 }
+// カード上のメモプレビュー（HTML保存分はテキスト化、Markdownは記号を除去）
+function notesPreview(s) {
+  if (!s) return "";
+  if (/^\s*</.test(s)) {
+    const body = new DOMParser().parseFromString(s, "text/html").body;
+    return body.textContent.replace(/\u200B/g, "").trim();
+  }
+  return mdPlain(s);
+}
 
 // ---- カード ----
 function cardEl(t) {
@@ -451,7 +478,7 @@ function cardEl(t) {
   const title = el("div", "title", t.title);
   title.title = "クリックしてタイトルを編集";
   card.appendChild(title);
-  if (t.notes && mdPlain(t.notes)) card.appendChild(el("div", "notes", mdPlain(t.notes)));
+  if (t.notes && notesPreview(t.notes)) card.appendChild(el("div", "notes", notesPreview(t.notes)));
 
   const meta = el("div", "meta");
   if (!state.project) meta.appendChild(el("span", "badge", t.project));
@@ -665,39 +692,26 @@ $("#projectForm").addEventListener("submit", () => {
 
 // ---- 詳細パネル ----
 const panel = $("#panel");
-let notesEditing = false;
-let notesCancel = false;
 
 function panelTask() {
   return state.tasks.find((x) => x.id === state.panelId) || null;
 }
 
 function openPanel(t) {
+  if (state.panelId !== t.id) saveNotes(); // 前のカードの未保存メモを確定
   state.panelId = t.id;
   panel.hidden = false;
-  notesEditing = false;
-  $("#notesEdit").hidden = true;
-  $("#notesHint").hidden = true;
-  $("#notesView").hidden = false;
+  notesDirty = false;
+  setEditorNotes(t.notes, t.id);
   syncPanel();
   render();
 }
 
 function closePanel() {
+  saveNotes();
   state.panelId = null;
   panel.hidden = true;
   render();
-}
-
-function renderNotes(notes) {
-  const view = $("#notesView");
-  if (notes && notes.trim()) {
-    // mdRender は入力を全てエスケープ済み。DOM化して差し込む
-    const doc = new DOMParser().parseFromString(mdRender(notes), "text/html");
-    view.replaceChildren(...doc.body.childNodes);
-  } else {
-    view.replaceChildren(el("span", "placeholder", "クリックしてメモを追加…（Markdown対応）"));
-  }
 }
 
 function syncPanel() {
@@ -711,7 +725,7 @@ function syncPanel() {
   set($("#propStatus"), t.status);
   set($("#propPriority"), t.priority || "");
   set($("#propProject"), t.project);
-  if (!notesEditing) renderNotes(t.notes);
+  if (ae !== notesEditor && !notesDirty) setEditorNotes(t.notes, t.id);
 }
 
 async function patchPanel(fields) {
@@ -754,34 +768,340 @@ propProject.addEventListener("blur", () => {
   patchPanel({ project: v });
 });
 
-const notesView = $("#notesView");
-const notesEdit = $("#notesEdit");
-notesView.addEventListener("click", (e) => {
-  if (e.target.closest("a")) return;
-  const t = panelTask();
-  if (!t) return;
-  notesEditing = true;
-  notesView.hidden = true;
-  notesEdit.hidden = false;
-  $("#notesHint").hidden = false;
-  notesEdit.value = t.notes || "";
-  autosize(notesEdit);
-  notesEdit.focus();
+// ---- メモ: Notion風 WYSIWYG エディタ ----
+const notesEditor = $("#notesEditor");
+let notesDirty = false;
+let notesSaveTimer = null;
+let notesTaskId = null;
+try { document.execCommand("defaultParagraphSeparator", false, "p"); } catch {}
+
+// 保存/表示するHTMLはこのホワイトリストに通す（リンクは https?: のみ）
+const ALLOWED_TAGS = new Set([
+  "H1", "H2", "H3", "P", "DIV", "BR", "UL", "OL", "LI", "BLOCKQUOTE",
+  "STRONG", "B", "EM", "I", "CODE", "A", "S", "U", "STRIKE",
+]);
+function sanitizeDoc(html) {
+  const doc = new DOMParser().parseFromString(html, "text/html");
+  (function walk(node) {
+    for (const child of [...node.childNodes]) {
+      if (child.nodeType === Node.ELEMENT_NODE) {
+        if (child.tagName === "SCRIPT" || child.tagName === "STYLE") {
+          child.remove();
+          continue;
+        }
+        if (!ALLOWED_TAGS.has(child.tagName)) {
+          while (child.firstChild) node.insertBefore(child.firstChild, child);
+          child.remove();
+          continue;
+        }
+        const isLinkCard = child.tagName === "A" && child.classList.contains("link-card");
+        for (const attr of [...child.attributes]) {
+          if (child.tagName === "A" && attr.name === "href" &&
+              /^https?:/i.test(child.getAttribute("href") || "")) continue;
+          child.removeAttribute(attr.name);
+        }
+        if (child.tagName === "A") {
+          if (!child.getAttribute("href")) {
+            while (child.firstChild) node.insertBefore(child.firstChild, child);
+            child.remove();
+            continue;
+          }
+          child.setAttribute("target", "_blank");
+          child.setAttribute("rel", "noopener");
+          if (isLinkCard) child.setAttribute("class", "link-card");
+        }
+        walk(child);
+      } else if (child.nodeType !== Node.TEXT_NODE) {
+        child.remove();
+      }
+    }
+  })(doc.body);
+  return doc;
+}
+function looksLikeHtml(s) { return /^\s*</.test(s); }
+
+function setEditorNotes(notes, id) {
+  notesTaskId = id ?? state.panelId;
+  const raw = notes && notes.trim() ? (looksLikeHtml(notes) ? notes : mdRender(notes)) : "";
+  const doc = sanitizeDoc(raw);
+  notesEditor.replaceChildren(...doc.body.childNodes);
+  // リンクカードはアトミックなブロックとして扱う（中にカーソルを入れない）
+  for (const a of notesEditor.querySelectorAll("a.link-card")) a.contentEditable = "false";
+}
+function serializeEditor() {
+  const doc = sanitizeDoc(notesEditor.innerHTML);
+  if (!doc.body.textContent.replace(/\u200B/g, "").trim() && !doc.body.querySelector("a")) return "";
+  return doc.body.innerHTML.replace(/\u200B/g, "");
+}
+function scheduleNotesSave() {
+  clearTimeout(notesSaveTimer);
+  notesSaveTimer = setTimeout(saveNotes, 800);
+}
+async function saveNotes() {
+  clearTimeout(notesSaveTimer);
+  if (!notesDirty || notesTaskId == null) return;
+  notesDirty = false;
+  const html = serializeEditor();
+  const t = state.tasks.find((x) => x.id === notesTaskId);
+  if (t && html === (t.notes || "")) return;
+  await api(`/api/tasks/${notesTaskId}`, {
+    method: "PATCH", body: JSON.stringify({ notes: html }),
+  });
+  await refresh();
+}
+notesEditor.addEventListener("input", () => {
+  notesDirty = true;
+  scheduleNotesSave();
+  inlineMarkdownRule();
 });
-notesEdit.addEventListener("input", () => autosize(notesEdit));
-notesEdit.addEventListener("keydown", (e) => {
-  if (e.key === "Escape") { notesCancel = true; notesEdit.blur(); }
-  if (e.key === "Enter" && (e.metaKey || e.ctrlKey)) { e.preventDefault(); notesEdit.blur(); }
+notesEditor.addEventListener("blur", () => saveNotes());
+
+// リンクはクリックで開く（Notionと同じ）
+notesEditor.addEventListener("click", (e) => {
+  const a = e.target.closest("a");
+  if (a && notesEditor.contains(a)) {
+    e.preventDefault();
+    window.open(a.href, "_blank", "noopener");
+  }
 });
-notesEdit.addEventListener("blur", () => {
-  notesEditing = false;
-  notesEdit.hidden = true;
-  $("#notesHint").hidden = true;
-  notesView.hidden = false;
-  const t = panelTask();
-  if (notesCancel || !t) { notesCancel = false; syncPanel(); return; }
-  if (notesEdit.value === (t.notes || "")) { syncPanel(); return; }
-  patchPanel({ notes: notesEdit.value });
+
+// 現在のカーソル位置のブロック要素（エディタ直下）を返す
+function currentBlock(container) {
+  let n = container.nodeType === Node.TEXT_NODE ? container.parentNode : container;
+  while (n && n !== notesEditor && n.parentNode !== notesEditor) n = n.parentNode;
+  return n === notesEditor ? null : n;
+}
+
+// 行頭の「# 」「- 」「1. 」などをスペース入力時に変換
+function maybeBlockRule(e) {
+  const sel = getSelection();
+  if (!sel.rangeCount || !sel.isCollapsed) return;
+  const r = sel.getRangeAt(0);
+  const block = currentBlock(r.startContainer);
+  const scope = block || notesEditor;
+  const pre = document.createRange();
+  pre.selectNodeContents(scope);
+  pre.setEnd(r.startContainer, r.startOffset);
+  const text = pre.toString().replace(/\u200B/g, "");
+  const rules = [
+    [/^#$/, () => document.execCommand("formatBlock", false, "h1")],
+    [/^##$/, () => document.execCommand("formatBlock", false, "h2")],
+    [/^###$/, () => document.execCommand("formatBlock", false, "h3")],
+    [/^[-*]$/, () => document.execCommand("insertUnorderedList")],
+    [/^1[.)]$/, () => document.execCommand("insertOrderedList")],
+    [/^>$/, () => document.execCommand("formatBlock", false, "blockquote")],
+  ];
+  for (const [re, apply] of rules) {
+    if (!re.test(text)) continue;
+    e.preventDefault();
+    pre.deleteContents();
+    apply();
+    notesDirty = true;
+    scheduleNotesSave();
+    return;
+  }
+}
+
+// **太字** / *斜体* / `コード` を閉じた瞬間に変換
+function inlineMarkdownRule() {
+  const sel = getSelection();
+  if (!sel.rangeCount || !sel.isCollapsed) return;
+  const node = sel.focusNode;
+  if (!node || node.nodeType !== Node.TEXT_NODE) return;
+  if (node.parentNode.closest?.("code")) return;
+  const upto = node.textContent.slice(0, sel.focusOffset);
+  const rules = [
+    [/\*\*([^*\s][^*]*)\*\*$/, "strong", 1],
+    [/(^|[^*])\*([^*\s][^*]*)\*$/, "em", 2],
+    [/`([^`]+)`$/, "code", 1],
+  ];
+  for (const [re, tag, group] of rules) {
+    const m = upto.match(re);
+    if (!m) continue;
+    const inner = m[group];
+    const matchLen = group === 2 ? m[0].length - m[1].length : m[0].length;
+    const start = sel.focusOffset - matchLen;
+    const range = document.createRange();
+    range.setStart(node, start);
+    range.setEnd(node, sel.focusOffset);
+    range.deleteContents();
+    const wrap = document.createElement(tag);
+    wrap.textContent = inner;
+    range.insertNode(wrap);
+    const after = document.createTextNode("\u200B");
+    wrap.parentNode.insertBefore(after, wrap.nextSibling);
+    const nr = document.createRange();
+    nr.setStart(after, 1);
+    nr.collapse(true);
+    sel.removeAllRanges();
+    sel.addRange(nr);
+    notesDirty = true;
+    scheduleNotesSave();
+    return;
+  }
+}
+
+function toggleInlineCode() {
+  const sel = getSelection();
+  if (!sel.rangeCount) return;
+  const r = sel.getRangeAt(0);
+  const base = r.startContainer.nodeType === Node.TEXT_NODE
+    ? r.startContainer.parentNode : r.startContainer;
+  const existing = base.closest?.("code");
+  if (existing && notesEditor.contains(existing)) {
+    const parent = existing.parentNode;
+    while (existing.firstChild) parent.insertBefore(existing.firstChild, existing);
+    existing.remove();
+    notesDirty = true;
+    scheduleNotesSave();
+    return;
+  }
+  if (r.collapsed) return;
+  try {
+    const code = document.createElement("code");
+    r.surroundContents(code);
+    notesDirty = true;
+    scheduleNotesSave();
+  } catch { /* 複数要素にまたがる選択は非対応 */ }
+}
+
+// Notion風ショートカット
+notesEditor.addEventListener("keydown", (e) => {
+  const mod = e.metaKey || e.ctrlKey;
+  if (mod && e.altKey) {
+    if (e.code === "Digit1") { e.preventDefault(); document.execCommand("formatBlock", false, "h1"); return; }
+    if (e.code === "Digit2") { e.preventDefault(); document.execCommand("formatBlock", false, "h2"); return; }
+    if (e.code === "Digit3") { e.preventDefault(); document.execCommand("formatBlock", false, "h3"); return; }
+    if (e.code === "Digit0") { e.preventDefault(); document.execCommand("formatBlock", false, "p"); return; }
+    return;
+  }
+  if (mod) {
+    const k = e.key.toLowerCase();
+    if (k === "b") { e.preventDefault(); document.execCommand("bold"); return; }
+    if (k === "i") { e.preventDefault(); document.execCommand("italic"); return; }
+    if (k === "e") { e.preventDefault(); toggleInlineCode(); return; }
+    if (k === "s" && e.shiftKey) { e.preventDefault(); document.execCommand("strikeThrough"); return; }
+    if (k === "k") { e.preventDefault(); openLinkPopup(); return; }
+  }
+  if (e.key === " ") maybeBlockRule(e);
+});
+
+// URL貼り付け → リンク化（選択中なら選択テキストに、空行ならリンクカード）
+notesEditor.addEventListener("paste", (e) => {
+  e.preventDefault();
+  const raw = e.clipboardData.getData("text/plain") || "";
+  const text = raw.trim();
+  if (!text) return;
+  if (/^https?:\/\/\S+$/i.test(text)) {
+    const sel = getSelection();
+    if (sel && !sel.isCollapsed) {
+      document.execCommand("createLink", false, text);
+      for (const a of notesEditor.querySelectorAll("a:not([target])")) {
+        a.setAttribute("target", "_blank");
+        a.setAttribute("rel", "noopener");
+      }
+    } else {
+      const r = sel.rangeCount ? sel.getRangeAt(0) : null;
+      const block = r ? currentBlock(r.startContainer) : null;
+      const emptyLine = block
+        ? !block.textContent.replace(/\u200B/g, "").trim()
+        : !notesEditor.textContent.replace(/\u200B/g, "").trim();
+      insertLinkNode(text, emptyLine);
+    }
+  } else {
+    document.execCommand("insertText", false, raw);
+  }
+  notesDirty = true;
+  scheduleNotesSave();
+});
+
+function insertLinkNode(url, asCard) {
+  const a = document.createElement("a");
+  a.href = url;
+  a.target = "_blank";
+  a.rel = "noopener";
+  a.textContent = asCard ? "🔗 " + url : url;
+  if (asCard) {
+    a.className = "link-card";
+    a.contentEditable = "false";
+  }
+  const sel = getSelection();
+  if (sel.rangeCount && notesEditor.contains(sel.anchorNode)) {
+    const r = sel.getRangeAt(0);
+    r.deleteContents();
+    r.insertNode(a);
+    r.setStartAfter(a);
+    r.collapse(true);
+    sel.removeAllRanges();
+    sel.addRange(r);
+  } else {
+    notesEditor.appendChild(a);
+  }
+  if (asCard && !a.nextElementSibling) {
+    // カードの後に続けて書けるよう空段落を用意し、そこへカーソルを移す
+    const p = document.createElement("p");
+    p.appendChild(document.createElement("br"));
+    a.parentNode.insertBefore(p, a.nextSibling);
+    const nr = document.createRange();
+    nr.setStart(p, 0);
+    nr.collapse(true);
+    sel.removeAllRanges();
+    sel.addRange(nr);
+  }
+}
+
+// ⌘K のリンク入力ポップアップ
+const linkPopup = $("#linkPopup");
+const linkInput = $("#linkInput");
+let savedLinkRange = null;
+function openLinkPopup() {
+  const sel = getSelection();
+  if (!sel.rangeCount) return;
+  savedLinkRange = sel.getRangeAt(0).cloneRange();
+  linkPopup.hidden = false;
+  const rect = savedLinkRange.getBoundingClientRect();
+  let x = rect.left;
+  let y = rect.bottom + 6;
+  if (!rect.width && !rect.height) {
+    const er = notesEditor.getBoundingClientRect();
+    x = er.left;
+    y = er.top + 4;
+  }
+  x = Math.min(x, innerWidth - linkPopup.offsetWidth - 8);
+  y = Math.min(y, innerHeight - linkPopup.offsetHeight - 8);
+  linkPopup.style.left = `${x}px`;
+  linkPopup.style.top = `${y}px`;
+  linkInput.value = "";
+  linkInput.focus();
+}
+function closeLinkPopup() { linkPopup.hidden = true; savedLinkRange = null; }
+linkInput.addEventListener("keydown", (e) => {
+  if (e.key === "Escape") { e.preventDefault(); closeLinkPopup(); notesEditor.focus(); return; }
+  if (e.key !== "Enter") return;
+  e.preventDefault();
+  let url = linkInput.value.trim();
+  const range = savedLinkRange;
+  closeLinkPopup();
+  if (!url) { notesEditor.focus(); return; }
+  if (!/^https?:\/\//i.test(url)) url = "https://" + url;
+  notesEditor.focus();
+  const sel = getSelection();
+  sel.removeAllRanges();
+  if (range) sel.addRange(range);
+  if (range && !range.collapsed) {
+    document.execCommand("createLink", false, url);
+    for (const a of notesEditor.querySelectorAll("a:not([target])")) {
+      a.setAttribute("target", "_blank");
+      a.setAttribute("rel", "noopener");
+    }
+  } else {
+    insertLinkNode(url, false);
+  }
+  notesDirty = true;
+  scheduleNotesSave();
+});
+document.addEventListener("mousedown", (e) => {
+  if (!linkPopup.hidden && !e.target.closest("#linkPopup")) closeLinkPopup();
 });
 
 // ---- … メニュー ----
@@ -853,7 +1173,8 @@ document.addEventListener("keydown", (e) => {
   if (e.key !== "Escape") return;
   if (!cardMenu.hidden) { hideMenu(); return; }
   const ae = document.activeElement;
-  if (ae && (ae.isContentEditable || ["INPUT", "TEXTAREA"].includes(ae.tagName))) return;
+  if (ae && ae.isContentEditable) { ae.blur(); return; }
+  if (ae && ["INPUT", "TEXTAREA"].includes(ae.tagName)) return;
   if ($("#projectDialog").open) return;
   if (!panel.hidden) closePanel();
 });
