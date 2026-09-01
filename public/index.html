@@ -82,6 +82,17 @@
     border-radius: 6px; padding: 1px 3px; margin: -1px -3px;
   }
   .card .title:hover { background: var(--accent-soft); }
+  .card .card-head { display: flex; align-items: baseline; gap: 6px; }
+  .card .card-head .title { flex: 1; min-width: 0; }
+  /* タスク番号: 編集不可の表示専用。Claudeに「#12 やって」と頼むための識別子 */
+  .task-id {
+    flex: none; font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+    font-size: 11px; font-weight: 600; color: var(--muted);
+    background: var(--bg); border: 1px solid var(--border);
+    border-radius: 5px; padding: 1px 5px; line-height: 1.5;
+    user-select: text; cursor: copy;
+  }
+  .task-id:hover { color: var(--accent); border-color: var(--accent); }
   .card .title[contenteditable] {
     background: var(--bg); outline: 2px solid var(--accent); cursor: text;
     user-select: text;
@@ -284,6 +295,7 @@
 <aside id="panel" hidden>
   <div class="panel-head">
     <button class="icon-btn" id="panelClose" title="閉じる (Esc)">✕</button>
+    <span class="task-id" id="panelTaskId"></span>
     <span class="spacer"></span>
     <button class="icon-btn" id="panelDispatch" title="Claude Codeに依頼">🤖 Claudeに依頼</button>
     <button class="icon-btn del" id="panelDelete" title="タスクを削除">🗑 削除</button>
@@ -555,6 +567,35 @@ function notesPreview(s) {
   return mdPlain(s);
 }
 
+// ---- タスク番号 ----
+// タイトルとは別要素にして編集対象から外す(番号は変わらない前提でClaudeに渡せるように)
+async function copyTaskId(id) {
+  if (id == null) return;
+  const text = `#${id}`;
+  try {
+    await navigator.clipboard.writeText(text);
+    showToast(`📋 ${text} をコピーしました`);
+    return;
+  } catch {
+    // クリップボードAPIが使えない環境(非セキュアコンテキスト等)向けのフォールバック
+  }
+  const ta = document.createElement("textarea");
+  ta.value = text;
+  ta.style.cssText = "position:fixed;top:-1000px;opacity:0";
+  document.body.appendChild(ta);
+  ta.select();
+  let ok = false;
+  try { ok = document.execCommand("copy"); } catch {}
+  ta.remove();
+  showToast(ok ? `📋 ${text} をコピーしました` : `タスク番号: ${text}`);
+}
+function taskIdEl(id) {
+  const span = el("span", "task-id", `#${id}`);
+  span.title = `タスク番号 #${id}（クリックでコピー）`;
+  span.onclick = (e) => { e.stopPropagation(); copyTaskId(id); };
+  return span;
+}
+
 // ---- カード ----
 function cardEl(t) {
   const card = el("div", "card" + (t.status === "done" ? " done" : ""));
@@ -564,7 +605,10 @@ function cardEl(t) {
 
   const title = el("div", "title", t.title);
   title.title = "クリックしてタイトルを編集";
-  card.appendChild(title);
+  const head = el("div", "card-head");
+  head.appendChild(taskIdEl(t.id));
+  head.appendChild(title);
+  card.appendChild(head);
   if (t.notes && notesPreview(t.notes)) card.appendChild(el("div", "notes", notesPreview(t.notes)));
 
   const meta = el("div", "meta");
@@ -872,7 +916,7 @@ function syncDispatchCwd() {
 async function openDispatchDialog(t) {
   dispatchTarget = t;
   dispatchProjectPath = "";
-  $("#dispatchTaskTitle").textContent = `「${t.title}」 — ${t.project}`;
+  $("#dispatchTaskTitle").textContent = `#${t.id} 「${t.title}」 — ${t.project}`;
   let savedTarget = "desktop";
   try { savedTarget = localStorage.getItem(DISPATCH_TARGET_KEY) || "desktop"; } catch {}
   $("#dispatchTarget").value = savedTarget;
@@ -949,6 +993,9 @@ function syncPanel() {
   if (!t) { closePanel(); return; }
   const ae = document.activeElement;
   const set = (elm, val) => { if (elm !== ae) elm.value = val; };
+  const idEl = $("#panelTaskId");
+  idEl.textContent = `#${t.id}`;
+  idEl.title = `タスク番号 #${t.id}（クリックでコピー）`;
   set($("#panelTitle"), t.title);
   autosize($("#panelTitle"));
   set($("#propStatus"), t.status);
@@ -983,6 +1030,7 @@ async function patchPanel(fields) {
 }
 
 $("#panelClose").onclick = () => closePanel();
+$("#panelTaskId").onclick = () => copyTaskId(state.panelId);
 $("#panelDelete").onclick = () => { const t = panelTask(); if (t) removeTask(t); };
 $("#panelDispatch").onclick = async () => {
   const t = panelTask();
