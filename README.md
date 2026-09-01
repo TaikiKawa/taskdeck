@@ -75,7 +75,28 @@ args = ["/Users/taiki/dev/taskdeck/src/mcp.js"]
 - 着手したら `task_update` で status を doing に、完了したら `task_done`。
 ```
 
+## タスクをボタンひとつで Claude Code に任せる
+
+カードの 🤖 ボタンから、そのタスクをバックグラウンドの Claude Code に依頼できる。
+
+1. カードにホバー → 🤖 をクリック
+2. 作業ディレクトリ（そのプロジェクトのリポジトリ）を指定
+   - 一度指定すると `~/.taskdeck/projects.json` に保存され、次回から自動入力
+3. 権限モードを選んで実行
+   - **安全**: ファイル編集のみ自動許可（`--permission-mode acceptEdits`）
+   - **全自動**: すべて許可（`--dangerously-skip-permissions`）。信頼できるタスクのみ
+
+実行中はカードに「🤖 実行中」バッジが出て、⏹ でいつでも停止できる。
+完了・失敗・停止すると実行ログ（Claude の最終サマリ）がタスクのメモに追記される。
+taskdeck MCP を登録済みなら、Claude 自身が着手時に doing / 完了時に done へ動かすので、
+ボード上でそのまま進捗が見える。
+
+- 仕組み: サーバーが `claude -p --output-format stream-json` を headless 起動（同一タスクの多重実行は不可、デフォルト30分でタイムアウト）
+- claude CLI の場所は既知のパス→ログインシェルの順で自動検出（明示するなら `TASKDECK_CLAUDE`）
+
 ## 環境変数
 
 - `TASKDECK_PORT` — UIのポート（デフォルト 4747）
 - `TASKDECK_DIR` — DBの保存先ディレクトリ（デフォルト `~/.taskdeck`）
+- `TASKDECK_CLAUDE` — claude CLI のパス（未設定なら自動検出）
+- `TASKDECK_RUN_TIMEOUT_MS` — Claude実行のタイムアウト（デフォルト30分）

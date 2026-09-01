@@ -104,6 +104,13 @@
   .chip.p-high { background: color-mix(in srgb, var(--danger) 16%, transparent); color: var(--danger); }
   .chip.p-medium { background: color-mix(in srgb, var(--warn) 18%, transparent); color: var(--warn); }
   .chip.p-low { background: var(--accent-soft); color: var(--accent); }
+  .chip.run-running {
+    background: color-mix(in srgb, var(--done) 16%, transparent); color: var(--done);
+    animation: run-pulse 1.4s ease-in-out infinite;
+  }
+  .chip.run-error { background: color-mix(in srgb, var(--danger) 16%, transparent); color: var(--danger); }
+  .chip.run-done { background: color-mix(in srgb, var(--done) 16%, transparent); color: var(--done); }
+  @keyframes run-pulse { 50% { opacity: .45; } }
   .meta .spacer { flex: 1; }
   .icon-btn {
     background: none; border: none; color: var(--muted); cursor: pointer;
@@ -315,6 +322,29 @@
   <button id="toastUndo">元に戻す</button>
 </div>
 
+<dialog id="dispatchDialog">
+  <form method="dialog" id="dispatchForm">
+    <h3 style="margin:0 0 4px;font-size:15px;">🤖 Claude Codeに依頼</h3>
+    <p id="dispatchTaskTitle" style="margin:6px 0 0;font-size:13px;color:var(--muted);"></p>
+    <label>作業ディレクトリ（このプロジェクトのリポジトリ）</label>
+    <input type="text" id="dispatchCwd" required autocomplete="off" spellcheck="false"
+           placeholder="/Users/you/dev/repo">
+    <label>権限モード</label>
+    <select id="dispatchMode" style="width:100%">
+      <option value="safe">安全 — ファイル編集のみ自動許可 (acceptEdits)</option>
+      <option value="full">全自動 — すべてのコマンドを許可（要注意）</option>
+    </select>
+    <p style="margin:10px 0 0;font-size:11px;color:var(--muted);line-height:1.6;">
+      claude がバックグラウンドで実行され、進捗はカードのバッジと SSE で反映されます。
+      完了・失敗時は実行ログがタスクのメモに追記されます。
+    </p>
+    <div class="dialog-actions">
+      <button type="button" class="ghost" id="dispatchCancel">キャンセル</button>
+      <button type="submit" class="primary">▶ 実行</button>
+    </div>
+  </form>
+</dialog>
+
 <dialog id="projectDialog">
   <form method="dialog" id="projectForm">
     <h3 style="margin:0 0 4px;font-size:15px;">グループを作成</h3>
@@ -339,7 +369,7 @@ function saveExtraProjects() {
 }
 const state = {
   tasks: [], project: "", dragging: null,
-  extraProjects: loadExtraProjects(), panelId: null,
+  extraProjects: loadExtraProjects(), panelId: null, runs: {},
 };
 const $ = (sel, el = document) => el.querySelector(sel);
 const cols = {};
@@ -369,11 +399,13 @@ async function api(path, opts = {}) {
 
 async function refresh() {
   const q = state.project ? `?project=${encodeURIComponent(state.project)}` : "";
-  const [tasks, projects] = await Promise.all([
+  const [tasks, projects, runs] = await Promise.all([
     api(`/api/tasks${q}`),
     api("/api/projects"),
+    api("/api/runs"),
   ]);
   state.tasks = tasks;
+  state.runs = Object.fromEntries(runs.map((r) => [r.taskId, r]));
   renderProjects(projects);
   render();
   syncPanel();
@@ -483,7 +515,33 @@ function cardEl(t) {
   const meta = el("div", "meta");
   if (!state.project) meta.appendChild(el("span", "badge", t.project));
   if (t.priority) meta.appendChild(el("span", `chip p-${t.priority}`, PRIORITY_LABEL[t.priority]));
+  const run = state.runs[t.id];
+  if (run) {
+    const label = { running: "🤖 実行中", done: "🤖 完了", error: "🤖 失敗", stopped: "🤖 停止" }[run.status];
+    if (label) {
+      const chip = el("span", `chip run-${run.status === "stopped" ? "error" : run.status}`, label);
+      if (run.status === "running" && run.lastText) chip.title = run.lastText;
+      if (run.error) chip.title = run.error;
+      meta.appendChild(chip);
+    }
+  }
   meta.appendChild(el("span", "spacer"));
+  if (run?.status === "running") {
+    const stopBtn = el("button", "icon-btn", "⏹");
+    stopBtn.title = "Claudeの実行を停止";
+    stopBtn.onclick = async (e) => {
+      e.stopPropagation();
+      try { await api(`/api/tasks/${t.id}/dispatch/stop`, { method: "POST" }); }
+      catch (err) { alert("停止に失敗: " + err.message); }
+      refresh();
+    };
+    meta.appendChild(stopBtn);
+  } else if (t.status !== "done") {
+    const aiBtn = el("button", "icon-btn", "🤖");
+    aiBtn.title = "Claude Codeに依頼";
+    aiBtn.onclick = (e) => { e.stopPropagation(); openDispatchDialog(t); };
+    meta.appendChild(aiBtn);
+  }
   if (t.status !== "done") {
     const doneBtn = el("button", "icon-btn", "✓");
     doneBtn.title = "完了にする";
@@ -687,6 +745,38 @@ $("#projectForm").addEventListener("submit", () => {
   state.extraProjects.add(name);
   saveExtraProjects();
   state.project = name;
+  refresh();
+});
+
+// ---- Claude Code への dispatch ----
+let dispatchTarget = null;
+async function openDispatchDialog(t) {
+  dispatchTarget = t;
+  $("#dispatchTaskTitle").textContent = `「${t.title}」 — ${t.project}`;
+  $("#dispatchCwd").value = "";
+  try {
+    const paths = await api("/api/project-paths");
+    if (dispatchTarget === t && paths[t.project]) $("#dispatchCwd").value = paths[t.project];
+  } catch {}
+  $("#dispatchDialog").showModal();
+  $("#dispatchCwd").focus();
+}
+$("#dispatchCancel").onclick = () => $("#dispatchDialog").close();
+$("#dispatchForm").addEventListener("submit", async () => {
+  const t = dispatchTarget;
+  dispatchTarget = null;
+  if (!t) return;
+  const cwd = $("#dispatchCwd").value.trim();
+  const mode = $("#dispatchMode").value;
+  try {
+    await api(`/api/tasks/${t.id}/dispatch`, {
+      method: "POST", body: JSON.stringify({ cwd, mode }),
+    });
+  } catch (err) {
+    let msg = err.message;
+    try { msg = JSON.parse(err.message).error || msg; } catch {}
+    alert("実行開始に失敗しました: " + msg);
+  }
   refresh();
 });
 
@@ -1182,7 +1272,7 @@ document.addEventListener("keydown", (e) => {
 const es = new EventSource("/api/events");
 es.onmessage = () => {
   if (state.dragging) return;
-  if ($("#projectDialog").open) return;
+  if ($("#projectDialog").open || $("#dispatchDialog").open) return;
   const ae = document.activeElement;
   if (ae && (ae.isContentEditable || ae.closest?.("#panel") || ae.closest?.(".composer"))) return;
   refresh();

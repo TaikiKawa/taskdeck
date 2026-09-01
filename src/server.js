@@ -6,10 +6,18 @@ import {
   addTask,
   dataVersion,
   deleteTask,
+  getTask,
   listProjects,
   listTasks,
   updateTask,
 } from "./db.js";
+import {
+  dispatchTask,
+  listRuns,
+  loadProjectPaths,
+  saveProjectPath,
+  stopRun,
+} from "./dispatch.js";
 
 const PORT = Number(process.env.TASKDECK_PORT || 4747);
 const publicDir = join(dirname(fileURLToPath(import.meta.url)), "..", "public");
@@ -70,6 +78,41 @@ const server = createServer(async (req, res) => {
     }
     if (req.method === "GET" && pathname === "/api/projects") {
       sendJson(res, 200, listProjects());
+      return;
+    }
+    if (req.method === "GET" && pathname === "/api/runs") {
+      sendJson(res, 200, listRuns());
+      return;
+    }
+    if (req.method === "GET" && pathname === "/api/project-paths") {
+      sendJson(res, 200, loadProjectPaths());
+      return;
+    }
+    const dispatchMatch = pathname.match(/^\/api\/tasks\/(\d+)\/dispatch$/);
+    if (req.method === "POST" && dispatchMatch) {
+      const id = Number(dispatchMatch[1]);
+      const body = await readBody(req);
+      const task = getTask(id);
+      if (!task) {
+        sendJson(res, 404, { error: `task ${id} not found` });
+        return;
+      }
+      const cwd = (body.cwd || "").trim() || loadProjectPaths()[task.project];
+      if (!cwd) {
+        sendJson(res, 400, { error: "作業ディレクトリが未設定です", code: "need_cwd" });
+        return;
+      }
+      const run = await dispatchTask(id, { cwd, mode: body.mode }, broadcast);
+      saveProjectPath(task.project, run.cwd);
+      broadcast();
+      sendJson(res, 202, run);
+      return;
+    }
+    const stopMatch = pathname.match(/^\/api\/tasks\/(\d+)\/dispatch\/stop$/);
+    if (req.method === "POST" && stopMatch) {
+      stopRun(Number(stopMatch[1]));
+      broadcast();
+      sendJson(res, 200, { stopped: true });
       return;
     }
     if (req.method === "POST" && pathname === "/api/tasks") {
