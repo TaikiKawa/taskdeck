@@ -1,0 +1,208 @@
+import Cocoa
+import WebKit
+
+@main
+class AppDelegate: NSObject, NSApplicationDelegate {
+    static func main() {
+        let app = NSApplication.shared
+        let delegate = AppDelegate()
+        app.delegate = delegate
+        app.setActivationPolicy(.regular)
+        app.run()
+    }
+
+    var window: NSWindow!
+    var webView: WKWebView!
+    var serverProcess: Process?
+    let port = ProcessInfo.processInfo.environment["TASKDECK_PORT"] ?? "4747"
+    var baseURL: URL { URL(string: "http://127.0.0.1:\(port)/")! }
+
+    func applicationDidFinishLaunching(_ notification: Notification) {
+        NSApp.applicationIconImage = makeIcon()
+        buildMenu()
+
+        let rect = NSRect(x: 0, y: 0, width: 1100, height: 720)
+        window = NSWindow(
+            contentRect: rect,
+            styleMask: [.titled, .closable, .miniaturizable, .resizable],
+            backing: .buffered, defer: false
+        )
+        window.title = "taskdeck"
+        window.minSize = NSSize(width: 720, height: 420)
+        window.setFrameAutosaveName("TaskdeckMain")
+        window.center()
+
+        let config = WKWebViewConfiguration()
+        webView = WKWebView(frame: rect, configuration: config)
+        webView.autoresizingMask = [.width, .height]
+        window.contentView = webView
+        window.makeKeyAndOrderFront(nil)
+        NSApp.activate(ignoringOtherApps: true)
+
+        ensureServerThenLoad()
+    }
+
+    func applicationShouldTerminateAfterLastWindowClosed(_ sender: NSApplication) -> Bool {
+        true
+    }
+
+    func applicationWillTerminate(_ notification: Notification) {
+        serverProcess?.terminate()
+    }
+
+    // MARK: - Server lifecycle
+
+    func ensureServerThenLoad() {
+        ping { alive in
+            if alive {
+                DispatchQueue.main.async { self.webView.load(URLRequest(url: self.baseURL)) }
+            } else {
+                self.spawnServer()
+                self.waitForServer(retries: 40)
+            }
+        }
+    }
+
+    func ping(_ completion: @escaping (Bool) -> Void) {
+        var req = URLRequest(url: baseURL.appendingPathComponent("api/projects"))
+        req.timeoutInterval = 0.5
+        URLSession.shared.dataTask(with: req) { _, res, _ in
+            completion((res as? HTTPURLResponse)?.statusCode == 200)
+        }.resume()
+    }
+
+    func waitForServer(retries: Int) {
+        ping { alive in
+            DispatchQueue.main.async {
+                if alive {
+                    self.webView.load(URLRequest(url: self.baseURL))
+                } else if retries > 0 {
+                    DispatchQueue.main.asyncAfter(deadline: .now() + 0.25) {
+                        self.waitForServer(retries: retries - 1)
+                    }
+                } else {
+                    self.showError("サーバーを起動できませんでした。\nnode と \(repoPath)/src/server.js を確認してください。")
+                }
+            }
+        }
+    }
+
+    func spawnServer() {
+        guard let node = findNode() else {
+            showError("node が見つかりませんでした。Node.js をインストールしてください。")
+            return
+        }
+        let proc = Process()
+        proc.executableURL = URL(fileURLWithPath: node)
+        proc.arguments = [repoPath + "/src/server.js"]
+        proc.currentDirectoryURL = URL(fileURLWithPath: repoPath)
+        var env = ProcessInfo.processInfo.environment
+        env["TASKDECK_PORT"] = port
+        proc.environment = env
+        do {
+            try proc.run()
+            serverProcess = proc
+        } catch {
+            showError("サーバー起動に失敗: \(error.localizedDescription)")
+        }
+    }
+
+    func findNode() -> String? {
+        if let env = ProcessInfo.processInfo.environment["TASKDECK_NODE"],
+           FileManager.default.isExecutableFile(atPath: env) { return env }
+        let home = NSHomeDirectory()
+        let candidates = [
+            home + "/.nodebrew/current/bin/node",
+            "/opt/homebrew/bin/node",
+            "/usr/local/bin/node",
+            "/usr/bin/node",
+        ]
+        for path in candidates where FileManager.default.isExecutableFile(atPath: path) {
+            return path
+        }
+        // Fall back to the login shell's PATH
+        let sh = Process()
+        sh.executableURL = URL(fileURLWithPath: "/bin/zsh")
+        sh.arguments = ["-lc", "command -v node"]
+        let pipe = Pipe()
+        sh.standardOutput = pipe
+        try? sh.run()
+        sh.waitUntilExit()
+        let out = String(
+            data: pipe.fileHandleForReading.readDataToEndOfFile(), encoding: .utf8
+        )?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+        return out.isEmpty ? nil : out
+    }
+
+    func showError(_ message: String) {
+        let alert = NSAlert()
+        alert.messageText = "taskdeck"
+        alert.informativeText = message
+        alert.runModal()
+    }
+
+    // MARK: - Menu (Cmd+Q / Cmd+W / Cmd+R / copy-paste)
+
+    func buildMenu() {
+        let main = NSMenu()
+
+        let appItem = NSMenuItem()
+        main.addItem(appItem)
+        let appMenu = NSMenu()
+        appItem.submenu = appMenu
+        appMenu.addItem(withTitle: "taskdeck を終了", action: #selector(NSApplication.terminate(_:)), keyEquivalent: "q")
+
+        let editItem = NSMenuItem()
+        main.addItem(editItem)
+        let editMenu = NSMenu(title: "編集")
+        editItem.submenu = editMenu
+        editMenu.addItem(withTitle: "取り消す", action: Selector(("undo:")), keyEquivalent: "z")
+        editMenu.addItem(withTitle: "やり直す", action: Selector(("redo:")), keyEquivalent: "Z")
+        editMenu.addItem(.separator())
+        editMenu.addItem(withTitle: "カット", action: #selector(NSText.cut(_:)), keyEquivalent: "x")
+        editMenu.addItem(withTitle: "コピー", action: #selector(NSText.copy(_:)), keyEquivalent: "c")
+        editMenu.addItem(withTitle: "ペースト", action: #selector(NSText.paste(_:)), keyEquivalent: "v")
+        editMenu.addItem(withTitle: "すべて選択", action: #selector(NSText.selectAll(_:)), keyEquivalent: "a")
+
+        let viewItem = NSMenuItem()
+        main.addItem(viewItem)
+        let viewMenu = NSMenu(title: "表示")
+        viewItem.submenu = viewMenu
+        viewMenu.addItem(withTitle: "再読み込み", action: #selector(reload), keyEquivalent: "r")
+
+        let windowItem = NSMenuItem()
+        main.addItem(windowItem)
+        let windowMenu = NSMenu(title: "ウインドウ")
+        windowItem.submenu = windowMenu
+        windowMenu.addItem(withTitle: "閉じる", action: #selector(NSWindow.performClose(_:)), keyEquivalent: "w")
+        windowMenu.addItem(withTitle: "しまう", action: #selector(NSWindow.performMiniaturize(_:)), keyEquivalent: "m")
+
+        NSApp.mainMenu = main
+    }
+
+    @objc func reload() {
+        webView.load(URLRequest(url: baseURL))
+    }
+
+    // MARK: - Dock icon (drawn at runtime, no asset pipeline)
+
+    func makeIcon() -> NSImage {
+        let size = NSSize(width: 512, height: 512)
+        let image = NSImage(size: size)
+        image.lockFocus()
+        let bg = NSBezierPath(
+            roundedRect: NSRect(x: 32, y: 32, width: 448, height: 448), xRadius: 96, yRadius: 96)
+        NSColor(calibratedRed: 0.31, green: 0.43, blue: 0.97, alpha: 1).setFill()
+        bg.fill()
+        NSColor.white.withAlphaComponent(0.92).setFill()
+        let heights: [CGFloat] = [220, 300, 150]
+        for (i, h) in heights.enumerated() {
+            let x = 96 + CGFloat(i) * 116
+            let bar = NSBezierPath(
+                roundedRect: NSRect(x: x, y: 392 - h, width: 88, height: h), xRadius: 20, yRadius: 20)
+            bar.fill()
+        }
+        image.unlockFocus()
+        return image
+    }
+}

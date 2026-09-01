@@ -11,9 +11,22 @@
 
 ```bash
 npm install
+./macos/build.sh   # taskdeck.app をリポジトリ直下にビルド
 ```
 
-## Web UI を起動
+## Mac アプリとして使う（推奨）
+
+```bash
+open taskdeck.app
+```
+
+- 起動するとサーバー（`src/server.js`）を自動で立ち上げ、ネイティブウインドウでボードを表示
+- アプリを終了（Cmd+Q）するとサーバーも一緒に終了
+- Dockに入れておけば普通のMacアプリとして使える（Cmd+Rで再読み込み）
+- Node.js の場所は nodebrew / Homebrew / ログインシェルのPATH から自動検出
+  （明示するなら環境変数 `TASKDECK_NODE`）
+
+## ブラウザで使う場合
 
 ```bash
 npm run ui
