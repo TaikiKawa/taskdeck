@@ -1,0 +1,355 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>taskdeck</title>
+<style>
+  :root {
+    --bg: #f4f5f7; --panel: #ffffff; --text: #1c1e21; --muted: #6b7280;
+    --border: #e2e4e8; --accent: #4f6ef7; --accent-soft: #eef1fe;
+    --danger: #d64545; --done: #2e9e5b; --shadow: 0 1px 3px rgba(0,0,0,.08);
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg: #16181d; --panel: #1f2229; --text: #e8eaed; --muted: #9aa0a8;
+      --border: #2e323b; --accent: #7b93ff; --accent-soft: #262c42;
+      --danger: #e06c6c; --done: #4cc27e; --shadow: 0 1px 3px rgba(0,0,0,.4);
+    }
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; background: var(--bg); color: var(--text);
+    font-family: -apple-system, BlinkMacSystemFont, "Hiragino Sans", "Segoe UI", sans-serif;
+    height: 100vh; display: flex; flex-direction: column;
+  }
+  header {
+    display: flex; align-items: center; gap: 12px; padding: 12px 20px;
+    border-bottom: 1px solid var(--border); background: var(--panel);
+    flex-wrap: wrap;
+  }
+  header h1 { font-size: 16px; margin: 0; letter-spacing: .5px; }
+  header h1 span { color: var(--accent); }
+  select, input[type=text] {
+    background: var(--bg); color: var(--text); border: 1px solid var(--border);
+    border-radius: 8px; padding: 8px 10px; font-size: 13px; outline: none;
+  }
+  input[type=text]:focus, select:focus { border-color: var(--accent); }
+  #quickAdd { flex: 1; min-width: 200px; }
+  main {
+    flex: 1; display: grid; grid-template-columns: repeat(3, 1fr);
+    gap: 14px; padding: 14px 20px; overflow: auto;
+  }
+  .col {
+    background: transparent; border-radius: 12px; display: flex;
+    flex-direction: column; min-width: 240px; min-height: 0;
+  }
+  .col-head {
+    display: flex; align-items: center; gap: 8px; padding: 4px 6px 10px;
+    font-size: 13px; font-weight: 600; color: var(--muted);
+    text-transform: uppercase; letter-spacing: .8px;
+  }
+  .col-head .count {
+    background: var(--panel); border: 1px solid var(--border);
+    border-radius: 10px; padding: 1px 8px; font-size: 12px;
+  }
+  .col-body {
+    flex: 1; display: flex; flex-direction: column; gap: 8px;
+    padding: 6px; border-radius: 12px; min-height: 80px; overflow-y: auto;
+  }
+  .col-body.dragover { background: var(--accent-soft); }
+  .card {
+    background: var(--panel); border: 1px solid var(--border);
+    border-radius: 10px; padding: 10px 12px; box-shadow: var(--shadow);
+    cursor: grab; user-select: none;
+  }
+  .card.dragging { opacity: .4; }
+  .card .title { font-size: 14px; line-height: 1.45; word-break: break-word; }
+  .card.done .title { color: var(--muted); text-decoration: line-through; }
+  .card .notes {
+    font-size: 12px; color: var(--muted); margin-top: 4px;
+    white-space: pre-wrap; word-break: break-word;
+    display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden;
+  }
+  .card .meta {
+    display: flex; align-items: center; gap: 6px; margin-top: 8px; font-size: 11px;
+  }
+  .badge {
+    background: var(--accent-soft); color: var(--accent);
+    border-radius: 6px; padding: 2px 7px; font-weight: 600;
+  }
+  .meta .spacer { flex: 1; }
+  .icon-btn {
+    background: none; border: none; color: var(--muted); cursor: pointer;
+    font-size: 13px; padding: 2px 5px; border-radius: 6px;
+  }
+  .icon-btn:hover { color: var(--text); background: var(--accent-soft); }
+  .icon-btn.del:hover { color: var(--danger); }
+  dialog {
+    background: var(--panel); color: var(--text); border: 1px solid var(--border);
+    border-radius: 14px; padding: 20px; width: min(480px, 92vw);
+    box-shadow: 0 10px 40px rgba(0,0,0,.3);
+  }
+  dialog::backdrop { background: rgba(0,0,0,.35); }
+  dialog label { display: block; font-size: 12px; color: var(--muted); margin: 12px 0 4px; }
+  dialog input[type=text], dialog textarea {
+    width: 100%; background: var(--bg); color: var(--text);
+    border: 1px solid var(--border); border-radius: 8px; padding: 9px 10px;
+    font-size: 14px; font-family: inherit; outline: none;
+  }
+  dialog textarea { min-height: 110px; resize: vertical; }
+  .dialog-actions { display: flex; gap: 8px; margin-top: 18px; justify-content: flex-end; }
+  button.primary {
+    background: var(--accent); color: #fff; border: none; border-radius: 8px;
+    padding: 9px 18px; font-size: 13px; cursor: pointer;
+  }
+  button.ghost {
+    background: none; border: 1px solid var(--border); color: var(--text);
+    border-radius: 8px; padding: 9px 14px; font-size: 13px; cursor: pointer;
+  }
+  .empty { color: var(--muted); font-size: 12px; text-align: center; padding: 18px 0; }
+</style>
+</head>
+<body>
+<header>
+  <h1>task<span>deck</span></h1>
+  <select id="projectFilter" title="プロジェクト"></select>
+  <form id="quickAddForm" style="display:contents">
+    <input id="quickAdd" type="text" autocomplete="off" placeholder="タスクを追加して Enter（先頭に #プロジェクト名 でグループ指定）">
+  </form>
+</header>
+<main>
+  <section class="col" data-status="todo">
+    <div class="col-head">Todo <span class="count"></span></div>
+    <div class="col-body"></div>
+  </section>
+  <section class="col" data-status="doing">
+    <div class="col-head">Doing <span class="count"></span></div>
+    <div class="col-body"></div>
+  </section>
+  <section class="col" data-status="done">
+    <div class="col-head">Done <span class="count"></span></div>
+    <div class="col-body"></div>
+  </section>
+</main>
+
+<dialog id="editor">
+  <form method="dialog" id="editorForm">
+    <label>タイトル</label>
+    <input type="text" id="editTitle" required>
+    <label>メモ</label>
+    <textarea id="editNotes"></textarea>
+    <label>プロジェクト</label>
+    <input type="text" id="editProject">
+    <div class="dialog-actions">
+      <button type="button" class="ghost" id="editCancel">キャンセル</button>
+      <button type="submit" class="primary">保存</button>
+    </div>
+  </form>
+</dialog>
+
+<script>
+const state = { tasks: [], project: "", dragging: null };
+const $ = (sel, el = document) => el.querySelector(sel);
+const cols = {};
+document.querySelectorAll(".col").forEach((c) => (cols[c.dataset.status] = c));
+
+function el(tag, className, text) {
+  const node = document.createElement(tag);
+  if (className) node.className = className;
+  if (text !== undefined) node.textContent = text;
+  return node;
+}
+
+async function api(path, opts = {}) {
+  const res = await fetch(path, {
+    headers: { "Content-Type": "application/json" },
+    ...opts,
+  });
+  if (!res.ok) throw new Error(await res.text());
+  return res.json();
+}
+
+async function refresh() {
+  const q = state.project ? `?project=${encodeURIComponent(state.project)}` : "";
+  const [tasks, projects] = await Promise.all([
+    api(`/api/tasks${q}`),
+    api("/api/projects"),
+  ]);
+  state.tasks = tasks;
+  renderProjects(projects);
+  render();
+}
+
+function renderProjects(projects) {
+  const sel = $("#projectFilter");
+  const current = state.project;
+  sel.replaceChildren();
+  sel.add(new Option(`すべて (${projects.reduce((a, p) => a + p.open, 0)})`, ""));
+  for (const p of projects) {
+    sel.add(new Option(`${p.project} (${p.open})`, p.project));
+  }
+  sel.value = current;
+  if (sel.value !== current) { state.project = ""; sel.value = ""; }
+}
+
+function render() {
+  for (const [status, col] of Object.entries(cols)) {
+    const body = $(".col-body", col);
+    body.replaceChildren();
+    const tasks = state.tasks
+      .filter((t) => t.status === status)
+      .sort((a, b) => a.position - b.position || a.id - b.id);
+    $(".count", col).textContent = tasks.length;
+    if (!tasks.length) body.appendChild(el("div", "empty", "タスクなし"));
+    for (const t of tasks) body.appendChild(cardEl(t));
+  }
+}
+
+function iconBtn(className, label, title, onClick) {
+  const btn = el("button", `icon-btn ${className}`, label);
+  btn.title = title;
+  btn.onclick = onClick;
+  return btn;
+}
+
+function cardEl(t) {
+  const card = el("div", "card" + (t.status === "done" ? " done" : ""));
+  card.draggable = true;
+  card.dataset.id = t.id;
+
+  card.appendChild(el("div", "title", t.title));
+  if (t.notes) card.appendChild(el("div", "notes", t.notes));
+
+  const meta = el("div", "meta");
+  if (!state.project) meta.appendChild(el("span", "badge", t.project));
+  meta.appendChild(el("span", "spacer"));
+  meta.appendChild(iconBtn("edit", "✎", "編集", (e) => {
+    e.stopPropagation();
+    openEditor(t);
+  }));
+  if (t.status !== "done") {
+    meta.appendChild(iconBtn("check", "✓", "完了", async (e) => {
+      e.stopPropagation();
+      await api(`/api/tasks/${t.id}`, { method: "PATCH", body: JSON.stringify({ status: "done" }) });
+      refresh();
+    }));
+  }
+  meta.appendChild(iconBtn("del", "✕", "削除", async (e) => {
+    e.stopPropagation();
+    if (!confirm(`削除しますか？\n「${t.title}」`)) return;
+    await api(`/api/tasks/${t.id}`, { method: "DELETE" });
+    refresh();
+  }));
+  card.appendChild(meta);
+
+  card.ondblclick = () => openEditor(t);
+  card.addEventListener("dragstart", (e) => {
+    state.dragging = t;
+    card.classList.add("dragging");
+    e.dataTransfer.effectAllowed = "move";
+    e.dataTransfer.setData("text/plain", String(t.id));
+  });
+  card.addEventListener("dragend", () => {
+    state.dragging = null;
+    card.classList.remove("dragging");
+    document.querySelectorAll(".col-body.dragover").forEach((b) => b.classList.remove("dragover"));
+  });
+  return card;
+}
+
+for (const [status, col] of Object.entries(cols)) {
+  const body = $(".col-body", col);
+  body.addEventListener("dragover", (e) => {
+    e.preventDefault();
+    e.dataTransfer.dropEffect = "move";
+    body.classList.add("dragover");
+  });
+  body.addEventListener("dragleave", (e) => {
+    if (!body.contains(e.relatedTarget)) body.classList.remove("dragover");
+  });
+  body.addEventListener("drop", async (e) => {
+    e.preventDefault();
+    body.classList.remove("dragover");
+    const t = state.dragging;
+    if (!t) return;
+    const cards = [...body.querySelectorAll(".card")].filter(
+      (c) => Number(c.dataset.id) !== t.id
+    );
+    let insertBefore = null;
+    for (const c of cards) {
+      const rect = c.getBoundingClientRect();
+      if (e.clientY < rect.top + rect.height / 2) { insertBefore = c; break; }
+    }
+    const inCol = state.tasks
+      .filter((x) => x.status === status && x.id !== t.id)
+      .sort((a, b) => a.position - b.position || a.id - b.id);
+    let position;
+    if (!inCol.length) {
+      position = 1024;
+    } else if (!insertBefore) {
+      position = inCol[inCol.length - 1].position + 1024;
+    } else {
+      const idx = inCol.findIndex((x) => x.id === Number(insertBefore.dataset.id));
+      const prev = idx > 0 ? inCol[idx - 1].position : inCol[idx].position - 2048;
+      position = (prev + inCol[idx].position) / 2;
+    }
+    await api(`/api/tasks/${t.id}`, {
+      method: "PATCH",
+      body: JSON.stringify({ status, position }),
+    });
+    refresh();
+  });
+}
+
+$("#quickAddForm").addEventListener("submit", async (e) => {
+  e.preventDefault();
+  const input = $("#quickAdd");
+  let title = input.value.trim();
+  if (!title) return;
+  let project = state.project || "inbox";
+  const m = title.match(/^#(\S+)\s+(.+)$/);
+  if (m) { project = m[1]; title = m[2]; }
+  input.value = "";
+  await api("/api/tasks", { method: "POST", body: JSON.stringify({ title, project }) });
+  refresh();
+});
+
+$("#projectFilter").addEventListener("change", (e) => {
+  state.project = e.target.value;
+  refresh();
+});
+
+let editing = null;
+function openEditor(t) {
+  editing = t;
+  $("#editTitle").value = t.title;
+  $("#editNotes").value = t.notes || "";
+  $("#editProject").value = t.project;
+  $("#editor").showModal();
+}
+$("#editCancel").onclick = () => $("#editor").close();
+$("#editorForm").addEventListener("submit", async () => {
+  if (!editing) return;
+  await api(`/api/tasks/${editing.id}`, {
+    method: "PATCH",
+    body: JSON.stringify({
+      title: $("#editTitle").value.trim(),
+      notes: $("#editNotes").value,
+      project: $("#editProject").value.trim() || "inbox",
+    }),
+  });
+  editing = null;
+  refresh();
+});
+
+const es = new EventSource("/api/events");
+es.onmessage = () => {
+  if (state.dragging || $("#editor").open) return;
+  refresh();
+};
+
+refresh();
+</script>
+</body>
+</html>

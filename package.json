@@ -1,0 +1,16 @@
+{
+  "name": "taskdeck",
+  "version": "0.1.0",
+  "description": "Minimal local kanban shared by humans and AI coding agents (MCP + web UI, SQLite)",
+  "type": "module",
+  "private": true,
+  "scripts": {
+    "ui": "node src/server.js",
+    "mcp": "node src/mcp.js"
+  },
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.12.0",
+    "better-sqlite3": "^11.9.0",
+    "zod": "^3.24.0"
+  }
+}
