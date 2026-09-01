@@ -144,6 +144,30 @@ ${notes ? `\n## メモ\n${notes}\n` : ""}
 `;
 }
 
+// ---- デスクトップアプリへの受け渡し ----
+// claude:// ディープリンクで Claude デスクトップアプリに新規セッションを開く。
+// アプリ側の認証を使うため CLI のログイン状態に依存しない。
+// (q はアプリ側で新規セッション画面にプリフィルされる)
+
+export function dispatchToDesktop(id, { cwd, app = "code" } = {}) {
+  const task = getTask(id);
+  if (!task) throw new Error(`task ${id} not found`);
+  if (!cwd) throw new Error("作業ディレクトリが未指定です");
+  cwd = expandHome(cwd.trim());
+  if (!existsSync(cwd) || !statSync(cwd).isDirectory()) {
+    throw new Error(`作業ディレクトリが存在しません: ${cwd}`);
+  }
+  const host = app === "cowork" ? "cowork" : "code";
+  const prompt = buildPrompt(task).slice(0, 4000);
+  const url =
+    `claude://${host}/new?q=${encodeURIComponent(prompt)}` +
+    `&folder=${encodeURIComponent(cwd)}&source=taskdeck`;
+  const proc = spawn("open", [url], { stdio: "ignore", detached: true });
+  proc.unref();
+  updateTask(id, { status: "doing" });
+  return { taskId: id, target: host, cwd };
+}
+
 // ---- 実行管理 ----
 
 const runs = new Map(); // taskId -> run

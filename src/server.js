@@ -13,6 +13,7 @@ import {
 } from "./db.js";
 import {
   dispatchTask,
+  dispatchToDesktop,
   guessProjectPath,
   listRuns,
   loadProjectPaths,
@@ -123,6 +124,17 @@ const server = createServer(async (req, res) => {
         guessProjectPath(task.project);
       if (!cwd) {
         sendJson(res, 400, { error: "作業ディレクトリが未設定です", code: "need_cwd" });
+        return;
+      }
+      // デスクトップアプリ(Claude Code / Cowork)へ受け渡すモード
+      if (body.target === "desktop" || body.target === "cowork") {
+        const result = dispatchToDesktop(id, {
+          cwd,
+          app: body.target === "cowork" ? "cowork" : "code",
+        });
+        saveProjectPath(task.project, result.cwd);
+        broadcast();
+        sendJson(res, 202, result);
         return;
       }
       const run = await dispatchTask(id, { cwd, mode: body.mode, resumeSession }, broadcast);

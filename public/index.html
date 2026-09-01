@@ -327,23 +327,30 @@
   <form method="dialog" id="dispatchForm">
     <h3 style="margin:0 0 4px;font-size:15px;">🤖 Claude Codeに依頼</h3>
     <p id="dispatchTaskTitle" style="margin:6px 0 0;font-size:13px;color:var(--muted);"></p>
-    <label>実行モード</label>
-    <select id="dispatchSession" style="width:100%">
-      <option value="new">新規セッションで実行</option>
-      <option value="resume">登録元セッションの続きで実行（文脈を引き継ぐ）</option>
+    <label>実行先</label>
+    <select id="dispatchTarget" style="width:100%">
+      <option value="desktop">デスクトップアプリで開く — Claude Code</option>
+      <option value="cowork">デスクトップアプリで開く — Cowork</option>
+      <option value="headless">バックグラウンドで実行 — claude CLI</option>
     </select>
+    <div id="dispatchResumeRow">
+      <label>実行モード</label>
+      <select id="dispatchSession" style="width:100%">
+        <option value="new">新規セッションで実行</option>
+        <option value="resume">登録元セッションの続きで実行（文脈を引き継ぐ）</option>
+      </select>
+    </div>
     <label>作業ディレクトリ（このプロジェクトのリポジトリ）</label>
     <input type="text" id="dispatchCwd" required autocomplete="off" spellcheck="false"
            placeholder="/Users/you/dev/repo">
-    <label>権限モード</label>
-    <select id="dispatchMode" style="width:100%">
-      <option value="safe">安全 — ファイル編集のみ自動許可 (acceptEdits)</option>
-      <option value="full">全自動 — すべてのコマンドを許可（要注意）</option>
-    </select>
-    <p style="margin:10px 0 0;font-size:11px;color:var(--muted);line-height:1.6;">
-      claude がバックグラウンドで実行され、進捗はカードのバッジと SSE で反映されます。
-      完了・失敗時は実行ログがタスクのメモに追記されます。
-    </p>
+    <div id="dispatchModeRow">
+      <label>権限モード</label>
+      <select id="dispatchMode" style="width:100%">
+        <option value="safe">安全 — ファイル編集のみ自動許可 (acceptEdits)</option>
+        <option value="full">全自動 — すべてのコマンドを許可（要注意）</option>
+      </select>
+    </div>
+    <p id="dispatchHint" style="margin:10px 0 0;font-size:11px;color:var(--muted);line-height:1.6;"></p>
     <div class="dialog-actions">
       <button type="button" class="ghost" id="dispatchCancel">キャンセル</button>
       <button type="submit" class="primary">▶ 実行</button>
@@ -758,6 +765,25 @@ $("#projectForm").addEventListener("submit", () => {
 let dispatchTarget = null;
 let dispatchProjectPath = "";
 const isClaudeSession = (s) => /^[0-9a-f]{8}-[0-9a-f-]{27}$/i.test(s || "");
+const DISPATCH_TARGET_KEY = "taskdeck.dispatchTarget";
+
+const DISPATCH_HINTS = {
+  desktop: "Claude デスクトップアプリに、タスク内容が入った新規セッションが開きます。内容を確認して送信してください。",
+  cowork: "Claude デスクトップアプリの Cowork に、タスク内容が入った新規セッションが開きます。",
+  headless: "claude がバックグラウンドで実行され、進捗はカードのバッジと SSE で反映されます。完了・失敗時は実行ログがタスクのメモに追記されます。",
+};
+
+function syncDispatchTargetUI() {
+  const target = $("#dispatchTarget").value;
+  const headless = target === "headless";
+  $("#dispatchResumeRow").hidden = !headless;
+  $("#dispatchModeRow").hidden = !headless;
+  $("#dispatchHint").textContent = DISPATCH_HINTS[target] || "";
+}
+$("#dispatchTarget").addEventListener("change", () => {
+  try { localStorage.setItem(DISPATCH_TARGET_KEY, $("#dispatchTarget").value); } catch {}
+  syncDispatchTargetUI();
+});
 
 function syncDispatchCwd() {
   const t = dispatchTarget;
@@ -771,6 +797,11 @@ async function openDispatchDialog(t) {
   dispatchTarget = t;
   dispatchProjectPath = "";
   $("#dispatchTaskTitle").textContent = `「${t.title}」 — ${t.project}`;
+  let savedTarget = "desktop";
+  try { savedTarget = localStorage.getItem(DISPATCH_TARGET_KEY) || "desktop"; } catch {}
+  $("#dispatchTarget").value = savedTarget;
+  if (!$("#dispatchTarget").value) $("#dispatchTarget").value = "desktop";
+  syncDispatchTargetUI();
   const sessionSel = $("#dispatchSession");
   const canResume = isClaudeSession(t.session);
   sessionSel.querySelector('option[value="resume"]').disabled = !canResume;
@@ -795,11 +826,15 @@ $("#dispatchForm").addEventListener("submit", async () => {
   if (!t) return;
   const cwd = $("#dispatchCwd").value.trim();
   const mode = $("#dispatchMode").value;
-  const resume = $("#dispatchSession").value === "resume";
+  const target = $("#dispatchTarget").value;
+  const resume = target === "headless" && $("#dispatchSession").value === "resume";
   try {
     await api(`/api/tasks/${t.id}/dispatch`, {
-      method: "POST", body: JSON.stringify({ cwd, mode, resume }),
+      method: "POST", body: JSON.stringify({ cwd, mode, resume, target }),
     });
+    if (target !== "headless") {
+      showToast("🤖 デスクトップアプリでセッションを開きました。内容を確認して送信してください");
+    }
   } catch (err) {
     let msg = err.message;
     try { msg = JSON.parse(err.message).error || msg; } catch {}
