@@ -3,8 +3,10 @@ import { readFileSync } from "node:fs";
 import { join, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
 import {
+  addProject,
   addTask,
   dataVersion,
+  deleteProject,
   deleteTask,
   getTask,
   listProjects,
@@ -80,6 +82,19 @@ const server = createServer(async (req, res) => {
     }
     if (req.method === "GET" && pathname === "/api/projects") {
       sendJson(res, 200, listProjects());
+      return;
+    }
+    if (req.method === "POST" && pathname === "/api/projects") {
+      const body = await readBody(req);
+      sendJson(res, 201, addProject(body.name ?? body.project));
+      broadcast();
+      return;
+    }
+    const projectMatch = pathname.match(/^\/api\/projects\/(.+)$/);
+    if (req.method === "DELETE" && projectMatch) {
+      // 空グループの登録解除のみ。タスクが残っていれば db 側で拒否される
+      sendJson(res, 200, { removed: deleteProject(decodeURIComponent(projectMatch[1])) });
+      broadcast();
       return;
     }
     if (req.method === "GET" && pathname === "/api/runs") {

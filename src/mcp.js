@@ -3,6 +3,7 @@ import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
 import { z } from "zod";
 import {
+  addProject,
   addTask,
   deleteTask,
   getTask,
@@ -120,6 +121,20 @@ server.tool(
     const task = getTask(id);
     const removed = deleteTask(id);
     return json({ removed, task: task ?? null });
+  }
+);
+
+server.tool(
+  "project_add",
+  "Create an empty project (group) on the board so it is visible everywhere (web UI, macOS app, other agents) before any task is added to it. Adding a task with a new project name also creates the group implicitly, so use this only when you want the empty group itself.",
+  {
+    name: z.string().describe("Project/group name, e.g. the repository name"),
+  },
+  async ({ name }) => {
+    const project = addProject(name);
+    // 呼び出し元の cwd をこのグループのリポジトリとして紐付ける(UIの🤖依頼で使用)
+    maybeRegisterProjectPath(project.project, process.cwd());
+    return json(project);
   }
 );
 

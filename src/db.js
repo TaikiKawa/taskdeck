@@ -24,6 +24,12 @@ const schema = [
   )`,
   `CREATE INDEX IF NOT EXISTS idx_tasks_project ON tasks(project)`,
   `CREATE INDEX IF NOT EXISTS idx_tasks_status ON tasks(status)`,
+  // タスクが1件も無いグループもサーバー側で共有するための登録簿。
+  // タスク付きのグループは tasks から導出されるため、ここには載らないこともある。
+  `CREATE TABLE IF NOT EXISTS projects (
+    name TEXT PRIMARY KEY,
+    created_at TEXT NOT NULL DEFAULT (datetime('now'))
+  )`,
 ];
 for (const stmt of schema) db.prepare(stmt).run();
 
@@ -114,15 +120,38 @@ export function deleteTask(id) {
   return info.changes > 0;
 }
 
+export function normalizeProjectName(name) {
+  const project = String(name ?? "").trim().replace(/^#/, "");
+  if (!project) throw new Error("project name is required");
+  return project;
+}
+
+// 登録済みの空グループも 0 件として返すため、tasks からの集計と UNION する
 export function listProjects() {
   return db
     .prepare(
-      `SELECT project,
-              COUNT(*) AS total,
-              SUM(status != 'done') AS open
-       FROM tasks GROUP BY project ORDER BY project`
+      `SELECT project, SUM(total) AS total, SUM(open) AS open FROM (
+         SELECT project, COUNT(*) AS total, SUM(status != 'done') AS open
+           FROM tasks GROUP BY project
+         UNION ALL
+         SELECT name AS project, 0 AS total, 0 AS open FROM projects
+       ) GROUP BY project ORDER BY project`
     )
     .all();
+}
+
+export function addProject(name) {
+  const project = normalizeProjectName(name);
+  db.prepare("INSERT OR IGNORE INTO projects (name) VALUES (?)").run(project);
+  return listProjects().find((p) => p.project === project) ?? { project, total: 0, open: 0 };
+}
+
+// 空グループの登録解除。タスクが残っている場合は消さない(タスクの巻き添え防止)
+export function deleteProject(name) {
+  const project = normalizeProjectName(name);
+  const { n } = db.prepare("SELECT COUNT(*) AS n FROM tasks WHERE project = ?").get(project);
+  if (n > 0) throw new Error(`グループ「${project}」にはタスクが ${n} 件残っています`);
+  return db.prepare("DELETE FROM projects WHERE name = ?").run(project).changes > 0;
 }
 
 export function dataVersion() {

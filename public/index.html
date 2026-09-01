@@ -259,6 +259,7 @@
     <option value="priority">優先度順</option>
   </select>
   <button type="button" class="ghost" id="newProjectBtn" title="新しいグループを作成">＋ グループ</button>
+  <button type="button" class="ghost" id="deleteProjectBtn" title="選択中の空グループを削除" hidden>🗑 グループ</button>
   <form id="quickAddForm" style="display:contents">
     <input id="quickAdd" type="text" autocomplete="off" placeholder="タスクを追加（先頭に #プロジェクト名 でグループ指定）">
     <button type="submit" class="primary">＋ 追加</button>
@@ -375,14 +376,28 @@
 </dialog>
 
 <script>
+// 旧方式(localStorage)で作られた空グループをサーバー側へ移行するためのキー。
+// 移行後は削除するので、以降このブラウザだけで持つ状態は無くなる。
 const EXTRA_PROJECTS_KEY = "taskdeck.extraProjects";
-function loadExtraProjects() {
-  try { return new Set(JSON.parse(localStorage.getItem(EXTRA_PROJECTS_KEY) || "[]")); }
-  catch { return new Set(); }
-}
-function saveExtraProjects() {
-  try { localStorage.setItem(EXTRA_PROJECTS_KEY, JSON.stringify([...state.extraProjects])); }
-  catch {}
+async function migrateLocalProjects() {
+  let names = [];
+  try { names = JSON.parse(localStorage.getItem(EXTRA_PROJECTS_KEY) || "[]"); }
+  catch { names = []; }
+  if (!Array.isArray(names) || !names.length) {
+    try { localStorage.removeItem(EXTRA_PROJECTS_KEY); } catch {}
+    return;
+  }
+  try {
+    for (const name of names) {
+      if (typeof name === "string" && name.trim()) {
+        await api("/api/projects", { method: "POST", body: JSON.stringify({ name }) });
+      }
+    }
+    localStorage.removeItem(EXTRA_PROJECTS_KEY);
+  } catch (err) {
+    // 移行に失敗したらキーは残し、次回起動時に再試行する
+    console.warn("グループの移行に失敗しました", err);
+  }
 }
 const SORT_MODE_KEY = "taskdeck.sortMode";
 function loadSortMode() {
@@ -393,7 +408,7 @@ function loadSortMode() {
 }
 const state = {
   tasks: [], project: "", dragging: null,
-  extraProjects: loadExtraProjects(), panelId: null, runs: {},
+  panelId: null, runs: {},
   sortMode: loadSortMode(),
 };
 const $ = (sel, el = document) => el.querySelector(sel);
@@ -418,7 +433,12 @@ async function api(path, opts = {}) {
     headers: { "Content-Type": "application/json" },
     ...opts,
   });
-  if (!res.ok) throw new Error(await res.text());
+  if (!res.ok) {
+    const text = await res.text();
+    let msg = text;
+    try { msg = JSON.parse(text).error || text; } catch {}
+    throw new Error(msg);
+  }
   return res.json();
 }
 
@@ -439,23 +459,16 @@ async function refresh() {
 function renderProjects(projects) {
   const sel = $("#projectFilter");
   const current = state.project;
-  // タスクが付いてサーバー側に現れたグループは、ローカル保持分から外す
-  const known = new Set(projects.map((p) => p.project));
-  let changed = false;
-  for (const name of state.extraProjects) {
-    if (known.has(name)) { state.extraProjects.delete(name); changed = true; }
-  }
-  if (changed) saveExtraProjects();
   sel.replaceChildren();
   sel.add(new Option(`すべて (${projects.reduce((a, p) => a + p.open, 0)})`, ""));
   for (const p of projects) {
     sel.add(new Option(`${p.project} (${p.open})`, p.project));
   }
-  for (const name of [...state.extraProjects].sort()) {
-    sel.add(new Option(`${name} (0)`, name));
-  }
   sel.value = current;
   if (sel.value !== current) { state.project = ""; sel.value = ""; }
+  // 削除できるのは、選択中かつタスクが1件も無いグループだけ
+  const selected = projects.find((p) => p.project === state.project);
+  $("#deleteProjectBtn").hidden = !selected || selected.total > 0;
 }
 
 const PRIORITY_RANK = { high: 0, medium: 1, low: 2, "": 3 };
@@ -799,14 +812,30 @@ $("#newProjectBtn").onclick = () => {
   $("#newProjectName").focus();
 };
 $("#projectCancel").onclick = () => $("#projectDialog").close();
-$("#projectForm").addEventListener("submit", () => {
+$("#projectForm").addEventListener("submit", async () => {
   const name = $("#newProjectName").value.trim().replace(/^#/, "");
   if (!name) return;
-  state.extraProjects.add(name);
-  saveExtraProjects();
-  state.project = name;
+  try {
+    await api("/api/projects", { method: "POST", body: JSON.stringify({ name }) });
+    state.project = name;
+  } catch (err) {
+    alert(`グループを作成できませんでした: ${err.message}`);
+  }
   refresh();
 });
+
+$("#deleteProjectBtn").onclick = async () => {
+  const name = state.project;
+  if (!name) return;
+  if (!confirm(`空のグループ「${name}」を削除しますか？`)) return;
+  try {
+    await api(`/api/projects/${encodeURIComponent(name)}`, { method: "DELETE" });
+    state.project = "";
+  } catch (err) {
+    alert(`グループを削除できませんでした: ${err.message}`);
+  }
+  refresh();
+};
 
 // ---- Claude Code への dispatch ----
 let dispatchTarget = null;
@@ -1425,7 +1454,7 @@ es.onmessage = () => {
   refresh();
 };
 
-refresh();
+migrateLocalProjects().then(refresh, refresh);
 </script>
 </body>
 </html>
