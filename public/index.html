@@ -280,6 +280,7 @@
   <div class="panel-head">
     <button class="icon-btn" id="panelClose" title="閉じる (Esc)">✕</button>
     <span class="spacer"></span>
+    <button class="icon-btn" id="panelDispatch" title="Claude Codeに依頼">🤖 Claudeに依頼</button>
     <button class="icon-btn del" id="panelDelete" title="タスクを削除">🗑 削除</button>
   </div>
   <div class="panel-body">
@@ -842,7 +843,24 @@ function syncPanel() {
   set($("#propStatus"), t.status);
   set($("#propPriority"), t.priority || "");
   set($("#propProject"), t.project);
+  syncPanelDispatch(t);
   if (ae !== notesEditor && !notesDirty) setEditorNotes(t.notes, t.id);
+}
+
+function syncPanelDispatch(t) {
+  const btn = $("#panelDispatch");
+  const run = state.runs[t.id];
+  if (run?.status === "running") {
+    btn.hidden = false;
+    btn.textContent = "⏹ 停止";
+    btn.title = "Claudeの実行を停止";
+  } else if (t.status === "done") {
+    btn.hidden = true;
+  } else {
+    btn.hidden = false;
+    btn.textContent = "🤖 Claudeに依頼";
+    btn.title = "Claude Codeに依頼";
+  }
 }
 
 async function patchPanel(fields) {
@@ -855,6 +873,20 @@ async function patchPanel(fields) {
 
 $("#panelClose").onclick = () => closePanel();
 $("#panelDelete").onclick = () => { const t = panelTask(); if (t) removeTask(t); };
+$("#panelDispatch").onclick = async () => {
+  const t = panelTask();
+  if (!t) return;
+  // フォーカスをパネル外に戻し、SSEによる自動更新が止まらないようにする
+  $("#panelDispatch").blur();
+  const run = state.runs[t.id];
+  if (run?.status === "running") {
+    try { await api(`/api/tasks/${t.id}/dispatch/stop`, { method: "POST" }); }
+    catch (err) { alert("停止に失敗: " + err.message); }
+    refresh();
+  } else {
+    openDispatchDialog(t);
+  }
+};
 
 const panelTitle = $("#panelTitle");
 panelTitle.addEventListener("input", () => autosize(panelTitle));
