@@ -27,7 +27,13 @@ const schema = [
 ];
 for (const stmt of schema) db.prepare(stmt).run();
 
+const columns = db.prepare("PRAGMA table_info(tasks)").all();
+if (!columns.some((c) => c.name === "priority")) {
+  db.prepare("ALTER TABLE tasks ADD COLUMN priority TEXT NOT NULL DEFAULT ''").run();
+}
+
 const VALID_STATUS = new Set(["todo", "doing", "done"]);
+const VALID_PRIORITY = new Set(["", "high", "medium", "low"]);
 
 function nextPosition(project, status) {
   const row = db
@@ -36,16 +42,17 @@ function nextPosition(project, status) {
   return (row?.p ?? 0) + 1024;
 }
 
-export function addTask({ title, notes = "", project = "inbox", session = null, status = "todo" }) {
+export function addTask({ title, notes = "", project = "inbox", session = null, status = "todo", priority = "" }) {
   if (!title || !title.trim()) throw new Error("title is required");
   if (!VALID_STATUS.has(status)) throw new Error(`invalid status: ${status}`);
+  if (!VALID_PRIORITY.has(priority)) throw new Error(`invalid priority: ${priority}`);
   project = project.trim() || "inbox";
   const info = db
     .prepare(
-      `INSERT INTO tasks (title, notes, project, session, status, position)
-       VALUES (?, ?, ?, ?, ?, ?)`
+      `INSERT INTO tasks (title, notes, project, session, status, position, priority)
+       VALUES (?, ?, ?, ?, ?, ?, ?)`
     )
-    .run(title.trim(), notes, project, session, status, nextPosition(project, status));
+    .run(title.trim(), notes, project, session, status, nextPosition(project, status), priority);
   return getTask(info.lastInsertRowid);
 }
 
@@ -69,13 +76,16 @@ export function listTasks({ project, status, session, includeDone = true } = {})
 export function updateTask(id, fields) {
   const task = getTask(id);
   if (!task) throw new Error(`task ${id} not found`);
-  const allowed = ["title", "notes", "project", "session", "status", "position"];
+  const allowed = ["title", "notes", "project", "session", "status", "position", "priority"];
   const sets = [];
   const args = [];
   for (const key of allowed) {
     if (fields[key] === undefined) continue;
     if (key === "status" && !VALID_STATUS.has(fields.status)) {
       throw new Error(`invalid status: ${fields.status}`);
+    }
+    if (key === "priority" && !VALID_PRIORITY.has(fields.priority)) {
+      throw new Error(`invalid priority: ${fields.priority}`);
     }
     sets.push(`${key} = ?`);
     args.push(fields[key]);

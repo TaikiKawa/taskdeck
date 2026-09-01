@@ -18,6 +18,7 @@ const json = (value) => ({
 });
 
 const statusEnum = z.enum(["todo", "doing", "done"]);
+const priorityEnum = z.enum(["", "high", "medium", "low"]);
 
 server.tool(
   "task_add",
@@ -27,8 +28,9 @@ server.tool(
       .array(
         z.object({
           title: z.string().describe("Short imperative task title"),
-          notes: z.string().optional().describe("Details, context, file paths"),
+          notes: z.string().optional().describe("Details, context, file paths (Markdown supported in the UI)"),
           status: statusEnum.optional().describe("Defaults to 'todo'"),
+          priority: priorityEnum.optional().describe("Priority badge; '' (default) means none"),
         })
       )
       .min(1),
@@ -61,13 +63,14 @@ server.tool(
 
 server.tool(
   "task_update",
-  "Update a task: change status (todo/doing/done), title, notes, or project. Set status 'doing' when starting work, 'done' when finished.",
+  "Update a task: change status (todo/doing/done), title, notes, project, or priority. Set status 'doing' when starting work, 'done' when finished.",
   {
     id: z.number().int(),
     title: z.string().optional(),
     notes: z.string().optional(),
     status: statusEnum.optional(),
     project: z.string().optional(),
+    priority: priorityEnum.optional().describe("'' clears the priority"),
   },
   async ({ id, ...fields }) => json(updateTask(id, fields))
 );

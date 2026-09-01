@@ -8,13 +8,15 @@
   :root {
     --bg: #f4f5f7; --panel: #ffffff; --text: #1c1e21; --muted: #6b7280;
     --border: #e2e4e8; --accent: #4f6ef7; --accent-soft: #eef1fe;
-    --danger: #d64545; --done: #2e9e5b; --shadow: 0 1px 3px rgba(0,0,0,.08);
+    --danger: #d64545; --done: #2e9e5b; --warn: #b97d10;
+    --shadow: 0 1px 3px rgba(0,0,0,.08);
   }
   @media (prefers-color-scheme: dark) {
     :root {
       --bg: #16181d; --panel: #1f2229; --text: #e8eaed; --muted: #9aa0a8;
       --border: #2e323b; --accent: #7b93ff; --accent-soft: #262c42;
-      --danger: #e06c6c; --done: #4cc27e; --shadow: 0 1px 3px rgba(0,0,0,.4);
+      --danger: #e06c6c; --done: #4cc27e; --warn: #e0a94f;
+      --shadow: 0 1px 3px rgba(0,0,0,.4);
     }
   }
   * { box-sizing: border-box; }
@@ -33,16 +35,18 @@
   select, input[type=text] {
     background: var(--bg); color: var(--text); border: 1px solid var(--border);
     border-radius: 8px; padding: 8px 10px; font-size: 13px; outline: none;
+    font-family: inherit;
   }
   input[type=text]:focus, select:focus { border-color: var(--accent); }
   #quickAdd { flex: 1; min-width: 200px; }
+  #layout { flex: 1; display: flex; min-height: 0; }
   main {
     flex: 1; display: grid; grid-template-columns: repeat(3, 1fr);
-    gap: 14px; padding: 14px 20px; overflow: auto;
+    gap: 14px; padding: 14px 20px; overflow: auto; min-width: 0;
   }
   .col {
     background: transparent; border-radius: 12px; display: flex;
-    flex-direction: column; min-width: 240px; min-height: 0;
+    flex-direction: column; min-width: 200px; min-height: 0;
   }
   .col-head {
     display: flex; align-items: center; gap: 8px; padding: 4px 6px 10px;
@@ -53,6 +57,13 @@
     background: var(--panel); border: 1px solid var(--border);
     border-radius: 10px; padding: 1px 8px; font-size: 12px;
   }
+  .col-head .spacer { flex: 1; }
+  .col-add {
+    background: var(--panel); border: 1px solid var(--border); color: var(--muted);
+    border-radius: 8px; width: 24px; height: 24px; font-size: 15px; line-height: 1;
+    cursor: pointer; display: flex; align-items: center; justify-content: center;
+  }
+  .col-add:hover { color: var(--accent); border-color: var(--accent); }
   .col-body {
     flex: 1; display: flex; flex-direction: column; gap: 8px;
     padding: 6px; border-radius: 12px; min-height: 80px; overflow-y: auto;
@@ -61,10 +72,20 @@
   .card {
     background: var(--panel); border: 1px solid var(--border);
     border-radius: 10px; padding: 10px 12px; box-shadow: var(--shadow);
-    cursor: grab; user-select: none;
+    cursor: pointer; user-select: none;
   }
+  .card:hover { border-color: color-mix(in srgb, var(--accent) 45%, var(--border)); }
   .card.dragging { opacity: .4; }
-  .card .title { font-size: 14px; line-height: 1.45; word-break: break-word; }
+  .card.selected { border-color: var(--accent); }
+  .card .title {
+    font-size: 14px; line-height: 1.45; word-break: break-word;
+    border-radius: 6px; padding: 1px 3px; margin: -1px -3px;
+  }
+  .card .title:hover { background: var(--accent-soft); }
+  .card .title[contenteditable] {
+    background: var(--bg); outline: 2px solid var(--accent); cursor: text;
+    user-select: text;
+  }
   .card.done .title { color: var(--muted); text-decoration: line-through; }
   .card .notes {
     font-size: 12px; color: var(--muted); margin-top: 4px;
@@ -73,25 +94,114 @@
   }
   .card .meta {
     display: flex; align-items: center; gap: 6px; margin-top: 8px; font-size: 11px;
+    min-height: 22px;
   }
   .badge {
     background: var(--accent-soft); color: var(--accent);
     border-radius: 6px; padding: 2px 7px; font-weight: 600;
   }
+  .chip { border-radius: 6px; padding: 2px 7px; font-weight: 600; font-size: 11px; }
+  .chip.p-high { background: color-mix(in srgb, var(--danger) 16%, transparent); color: var(--danger); }
+  .chip.p-medium { background: color-mix(in srgb, var(--warn) 18%, transparent); color: var(--warn); }
+  .chip.p-low { background: var(--accent-soft); color: var(--accent); }
   .meta .spacer { flex: 1; }
   .icon-btn {
     background: none; border: none; color: var(--muted); cursor: pointer;
-    font-size: 13px; padding: 2px 5px; border-radius: 6px;
+    font-size: 13px; padding: 2px 5px; border-radius: 6px; font-family: inherit;
   }
   .icon-btn:hover { color: var(--text); background: var(--accent-soft); }
   .icon-btn.del:hover { color: var(--danger); }
-  .col-head .spacer { flex: 1; }
-  .col-add {
-    background: var(--panel); border: 1px solid var(--border); color: var(--muted);
-    border-radius: 8px; width: 24px; height: 24px; font-size: 15px; line-height: 1;
-    cursor: pointer; display: flex; align-items: center; justify-content: center;
+  .card .meta .icon-btn { opacity: 0; transition: opacity .12s; }
+  .card:hover .meta .icon-btn, .card:focus-within .meta .icon-btn { opacity: 1; }
+  .card.composer { cursor: auto; }
+  .composer textarea {
+    width: 100%; background: none; border: none; outline: none; color: var(--text);
+    font-size: 14px; font-family: inherit; line-height: 1.45; resize: none;
+    min-height: 40px; padding: 0;
   }
-  .col-add:hover { color: var(--accent); border-color: var(--accent); }
+
+  /* ---- 詳細パネル (Notion風サイドピーク) ---- */
+  #panel {
+    width: 420px; max-width: 46vw; border-left: 1px solid var(--border);
+    background: var(--panel); display: flex; flex-direction: column; min-height: 0;
+  }
+  #panel[hidden] { display: none; }
+  .panel-head {
+    display: flex; align-items: center; gap: 8px; padding: 10px 12px;
+    border-bottom: 1px solid var(--border);
+  }
+  .panel-head .spacer { flex: 1; }
+  .panel-body { flex: 1; overflow-y: auto; padding: 18px 20px 30px; }
+  #panelTitle {
+    width: 100%; background: none; border: none; outline: none; color: var(--text);
+    font-size: 20px; font-weight: 700; font-family: inherit; resize: none;
+    line-height: 1.4; padding: 0; margin: 0 0 16px; overflow: hidden;
+  }
+  #panelTitle::placeholder { color: var(--muted); }
+  .props {
+    display: grid; grid-template-columns: 92px 1fr; gap: 8px 10px;
+    align-items: center; margin-bottom: 20px;
+  }
+  .props .prop-label { font-size: 12px; color: var(--muted); }
+  .notes-head { font-size: 12px; color: var(--muted); margin: 0 0 6px; }
+  .notes-view {
+    min-height: 140px; font-size: 14px; line-height: 1.65; cursor: text;
+    border-radius: 8px; padding: 4px 2px; word-break: break-word;
+  }
+  .notes-view:hover { background: color-mix(in srgb, var(--accent-soft) 55%, transparent); }
+  .notes-view .placeholder { color: var(--muted); }
+  .notes-view h1 { font-size: 20px; margin: 14px 0 6px; }
+  .notes-view h2 { font-size: 17px; margin: 12px 0 5px; }
+  .notes-view h3 { font-size: 15px; margin: 10px 0 4px; }
+  .notes-view p { margin: 3px 0; }
+  .notes-view ul, .notes-view ol { margin: 3px 0; padding-left: 22px; }
+  .notes-view li { margin: 2px 0; }
+  .notes-view code {
+    background: var(--accent-soft); border-radius: 4px; padding: 1px 5px;
+    font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 12.5px;
+  }
+  .notes-view a { color: var(--accent); }
+  .notes-view .md-gap { height: 10px; }
+  .notes-edit {
+    width: 100%; min-height: 220px; background: var(--bg); color: var(--text);
+    border: 1px solid var(--accent); border-radius: 8px; padding: 10px 12px;
+    font-size: 13.5px; font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+    line-height: 1.6; outline: none; resize: vertical;
+  }
+  .notes-hint { font-size: 11px; color: var(--muted); margin-top: 6px; }
+
+  /* ---- カードの … メニュー ---- */
+  #cardMenu {
+    position: fixed; z-index: 50; background: var(--panel);
+    border: 1px solid var(--border); border-radius: 10px;
+    box-shadow: 0 8px 30px rgba(0,0,0,.25); padding: 4px; min-width: 150px;
+  }
+  #cardMenu[hidden] { display: none; }
+  #cardMenu button {
+    display: flex; align-items: center; gap: 8px; width: 100%;
+    background: none; border: none; color: var(--text); font-size: 13px;
+    font-family: inherit; padding: 7px 10px; border-radius: 6px; cursor: pointer;
+    text-align: left;
+  }
+  #cardMenu button:hover { background: var(--accent-soft); }
+  #cardMenu button.danger-item { color: var(--danger); }
+  #cardMenu button.danger-item:hover { background: color-mix(in srgb, var(--danger) 12%, transparent); }
+
+  /* ---- 削除トースト ---- */
+  #toast {
+    position: fixed; left: 50%; bottom: 24px; transform: translateX(-50%);
+    background: var(--panel); border: 1px solid var(--border); border-radius: 10px;
+    box-shadow: 0 8px 30px rgba(0,0,0,.3); padding: 10px 16px;
+    display: flex; gap: 14px; align-items: center; font-size: 13px; z-index: 60;
+    max-width: 80vw;
+  }
+  #toast[hidden] { display: none; }
+  #toast .msg { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  #toast button {
+    background: none; border: none; color: var(--accent); cursor: pointer;
+    font-size: 13px; font-weight: 600; font-family: inherit; flex-shrink: 0;
+  }
+
   dialog {
     background: var(--panel); color: var(--text); border: 1px solid var(--border);
     border-radius: 14px; padding: 20px; width: min(480px, 92vw);
@@ -99,26 +209,20 @@
   }
   dialog::backdrop { background: rgba(0,0,0,.35); }
   dialog label { display: block; font-size: 12px; color: var(--muted); margin: 12px 0 4px; }
-  dialog input[type=text], dialog textarea {
+  dialog input[type=text] {
     width: 100%; background: var(--bg); color: var(--text);
     border: 1px solid var(--border); border-radius: 8px; padding: 9px 10px;
     font-size: 14px; font-family: inherit; outline: none;
   }
-  dialog textarea { min-height: 110px; resize: vertical; }
   .dialog-actions { display: flex; gap: 8px; margin-top: 18px; justify-content: flex-end; }
-  .dialog-actions .spacer { flex: 1; }
   button.primary {
     background: var(--accent); color: #fff; border: none; border-radius: 8px;
-    padding: 9px 18px; font-size: 13px; cursor: pointer;
+    padding: 9px 18px; font-size: 13px; cursor: pointer; font-family: inherit;
   }
-  button.danger {
-    background: none; border: 1px solid var(--danger); color: var(--danger);
-    border-radius: 8px; padding: 9px 14px; font-size: 13px; cursor: pointer;
-  }
-  button.danger:hover { background: var(--danger); color: #fff; }
   button.ghost {
     background: none; border: 1px solid var(--border); color: var(--text);
     border-radius: 8px; padding: 9px 14px; font-size: 13px; cursor: pointer;
+    font-family: inherit;
   }
   .empty { color: var(--muted); font-size: 12px; text-align: center; padding: 18px 0; }
 </style>
@@ -133,6 +237,7 @@
     <button type="submit" class="primary">＋ 追加</button>
   </form>
 </header>
+<div id="layout">
 <main>
   <section class="col" data-status="todo">
     <div class="col-head">Todo <span class="count"></span><span class="spacer"></span><button class="col-add" title="このカラムにタスクを追加">＋</button></div>
@@ -148,23 +253,49 @@
   </section>
 </main>
 
-<dialog id="editor">
-  <form method="dialog" id="editorForm">
-    <h3 id="editorHeading" style="margin:0 0 4px;font-size:15px;"></h3>
-    <label>タイトル</label>
-    <input type="text" id="editTitle" required>
-    <label>メモ</label>
-    <textarea id="editNotes"></textarea>
-    <label>プロジェクト</label>
-    <input type="text" id="editProject">
-    <div class="dialog-actions">
-      <button type="button" class="danger" id="editDelete">削除</button>
-      <span class="spacer"></span>
-      <button type="button" class="ghost" id="editCancel">キャンセル</button>
-      <button type="submit" class="primary" id="editSubmit">保存</button>
+<aside id="panel" hidden>
+  <div class="panel-head">
+    <button class="icon-btn" id="panelClose" title="閉じる (Esc)">✕</button>
+    <span class="spacer"></span>
+    <button class="icon-btn del" id="panelDelete" title="タスクを削除">🗑 削除</button>
+  </div>
+  <div class="panel-body">
+    <textarea id="panelTitle" rows="1" placeholder="無題"></textarea>
+    <div class="props">
+      <span class="prop-label">ステータス</span>
+      <select id="propStatus">
+        <option value="todo">Todo</option>
+        <option value="doing">Doing</option>
+        <option value="done">Done</option>
+      </select>
+      <span class="prop-label">優先度</span>
+      <select id="propPriority">
+        <option value="">なし</option>
+        <option value="high">高</option>
+        <option value="medium">中</option>
+        <option value="low">低</option>
+      </select>
+      <span class="prop-label">グループ</span>
+      <input id="propProject" type="text">
     </div>
-  </form>
-</dialog>
+    <div class="notes-head">メモ（クリックで編集）</div>
+    <div id="notesView" class="notes-view"></div>
+    <textarea id="notesEdit" class="notes-edit" hidden
+      placeholder="メモを書く…"></textarea>
+    <div class="notes-hint" id="notesHint" hidden># 見出し / **太字** / *斜体* / `コード` / - リスト / [リンク](URL)。⌘+Enter か外側クリックで保存、Esc で取り消し</div>
+  </div>
+</aside>
+</div>
+
+<div id="cardMenu" hidden>
+  <button id="menuDone">✓ 完了にする</button>
+  <button id="menuDelete" class="danger-item">🗑 削除</button>
+</div>
+
+<div id="toast" hidden>
+  <span class="msg"></span>
+  <button id="toastUndo">元に戻す</button>
+</div>
 
 <dialog id="projectDialog">
   <form method="dialog" id="projectForm">
@@ -188,16 +319,25 @@ function saveExtraProjects() {
   try { localStorage.setItem(EXTRA_PROJECTS_KEY, JSON.stringify([...state.extraProjects])); }
   catch {}
 }
-const state = { tasks: [], project: "", dragging: null, extraProjects: loadExtraProjects() };
+const state = {
+  tasks: [], project: "", dragging: null,
+  extraProjects: loadExtraProjects(), panelId: null,
+};
 const $ = (sel, el = document) => el.querySelector(sel);
 const cols = {};
 document.querySelectorAll(".col").forEach((c) => (cols[c.dataset.status] = c));
+const PRIORITY_LABEL = { high: "高", medium: "中", low: "低" };
 
 function el(tag, className, text) {
   const node = document.createElement(tag);
   if (className) node.className = className;
   if (text !== undefined) node.textContent = text;
   return node;
+}
+
+function autosize(ta) {
+  ta.style.height = "auto";
+  ta.style.height = ta.scrollHeight + "px";
 }
 
 async function api(path, opts = {}) {
@@ -218,6 +358,7 @@ async function refresh() {
   state.tasks = tasks;
   renderProjects(projects);
   render();
+  syncPanel();
 }
 
 function renderProjects(projects) {
@@ -255,45 +396,99 @@ function render() {
   }
 }
 
-function iconBtn(className, label, title, onClick) {
-  const btn = el("button", `icon-btn ${className}`, label);
-  btn.title = title;
-  btn.onclick = onClick;
-  return btn;
+// ---- Markdown風レンダリング（メモ用） ----
+// 入力テキストは最初に全てHTMLエスケープし、その後に整形タグのみを生成する。
+// リンクのhrefは https?: で始まるものだけ許可するため、任意HTML/JSは注入できない。
+function escapeHtml(s) {
+  return s.replace(/&/g, "&amp;").replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;").replace(/"/g, "&quot;");
+}
+function mdInline(s) {
+  s = s.replace(/`([^`]+)`/g, "<code>$1</code>");
+  s = s.replace(/\*\*([^*]+)\*\*/g, "<strong>$1</strong>");
+  s = s.replace(/\*([^*]+)\*/g, "<em>$1</em>");
+  s = s.replace(/\[([^\]]+)\]\((https?:[^)\s]+)\)/g,
+    '<a href="$2" target="_blank" rel="noopener">$1</a>');
+  s = s.replace(/(^|[\s、。（(])(https?:\/\/[^\s<]+)/g,
+    '$1<a href="$2" target="_blank" rel="noopener">$2</a>');
+  return s;
+}
+function mdRender(text) {
+  const out = [];
+  let list = null;
+  const flush = () => { if (list) { out.push(`</${list}>`); list = null; } };
+  for (const line of escapeHtml(text).split("\n")) {
+    const h = line.match(/^(#{1,3})\s+(.*)$/);
+    if (h) { flush(); out.push(`<h${h[1].length}>${mdInline(h[2])}</h${h[1].length}>`); continue; }
+    const ul = line.match(/^[-*]\s+(.*)$/);
+    if (ul) {
+      if (list !== "ul") { flush(); out.push("<ul>"); list = "ul"; }
+      out.push(`<li>${mdInline(ul[1])}</li>`); continue;
+    }
+    const ol = line.match(/^\d+[.)]\s+(.*)$/);
+    if (ol) {
+      if (list !== "ol") { flush(); out.push("<ol>"); list = "ol"; }
+      out.push(`<li>${mdInline(ol[1])}</li>`); continue;
+    }
+    flush();
+    if (!line.trim()) { out.push('<div class="md-gap"></div>'); continue; }
+    out.push(`<p>${mdInline(line)}</p>`);
+  }
+  flush();
+  return out.join("");
+}
+function mdPlain(s) {
+  return s.replace(/\[([^\]]+)\]\([^)]*\)/g, "$1").replace(/[#*`]/g, "").trim();
 }
 
+// ---- カード ----
 function cardEl(t) {
   const card = el("div", "card" + (t.status === "done" ? " done" : ""));
   card.draggable = true;
   card.dataset.id = t.id;
+  if (t.id === state.panelId) card.classList.add("selected");
 
-  card.appendChild(el("div", "title", t.title));
-  if (t.notes) card.appendChild(el("div", "notes", t.notes));
+  const title = el("div", "title", t.title);
+  title.title = "クリックしてタイトルを編集";
+  card.appendChild(title);
+  if (t.notes && mdPlain(t.notes)) card.appendChild(el("div", "notes", mdPlain(t.notes)));
 
   const meta = el("div", "meta");
   if (!state.project) meta.appendChild(el("span", "badge", t.project));
+  if (t.priority) meta.appendChild(el("span", `chip p-${t.priority}`, PRIORITY_LABEL[t.priority]));
   meta.appendChild(el("span", "spacer"));
-  meta.appendChild(iconBtn("edit", "✎", "編集", (e) => {
-    e.stopPropagation();
-    openEditor(t);
-  }));
   if (t.status !== "done") {
-    meta.appendChild(iconBtn("check", "✓", "完了", async (e) => {
+    const doneBtn = el("button", "icon-btn", "✓");
+    doneBtn.title = "完了にする";
+    doneBtn.onclick = async (e) => {
       e.stopPropagation();
       await api(`/api/tasks/${t.id}`, { method: "PATCH", body: JSON.stringify({ status: "done" }) });
       refresh();
-    }));
+    };
+    meta.appendChild(doneBtn);
   }
-  meta.appendChild(iconBtn("del", "✕", "削除", async (e) => {
-    e.stopPropagation();
-    if (!confirm(`削除しますか？\n「${t.title}」`)) return;
-    await api(`/api/tasks/${t.id}`, { method: "DELETE" });
-    refresh();
-  }));
+  const moreBtn = el("button", "icon-btn", "⋯");
+  moreBtn.title = "メニュー";
+  moreBtn.onclick = (e) => { e.stopPropagation(); openMenu(moreBtn, t); };
+  meta.appendChild(moreBtn);
   card.appendChild(meta);
 
-  card.ondblclick = () => openEditor(t);
+  // タイトルクリック → その場で編集
+  title.addEventListener("click", (e) => {
+    e.stopPropagation();
+    if (title.isContentEditable) return;
+    startTitleEdit(card, title, t);
+  });
+
+  // カード本体クリック → 詳細パネル
+  card.addEventListener("click", (e) => {
+    if (e.target.closest("button") || e.target.closest("a")) return;
+    if (title.isContentEditable) return;
+    openPanel(t);
+  });
+
   card.addEventListener("dragstart", (e) => {
+    if (title.isContentEditable) { e.preventDefault(); return; }
     state.dragging = t;
     card.classList.add("dragging");
     e.dataTransfer.effectAllowed = "move";
@@ -307,6 +502,89 @@ function cardEl(t) {
   return card;
 }
 
+function startTitleEdit(card, title, t) {
+  card.draggable = false;
+  const original = t.title;
+  try { title.contentEditable = "plaintext-only"; }
+  catch { title.contentEditable = "true"; }
+  title.focus();
+  // カーソルを末尾に
+  const range = document.createRange();
+  range.selectNodeContents(title);
+  range.collapse(false);
+  const sel = getSelection();
+  sel.removeAllRanges();
+  sel.addRange(range);
+
+  let cancelled = false;
+  const finish = async () => {
+    title.contentEditable = "false";
+    title.removeAttribute("contenteditable");
+    card.draggable = true;
+    const text = title.textContent.trim();
+    if (cancelled || !text || text === original) {
+      title.textContent = original;
+      return;
+    }
+    await api(`/api/tasks/${t.id}`, { method: "PATCH", body: JSON.stringify({ title: text }) });
+    refresh();
+  };
+  title.addEventListener("blur", finish, { once: true });
+  title.addEventListener("keydown", function onKey(e) {
+    if (e.key === "Enter") { e.preventDefault(); title.blur(); }
+    if (e.key === "Escape") { cancelled = true; title.blur(); }
+    if (!title.isContentEditable) title.removeEventListener("keydown", onKey);
+  });
+}
+
+// ---- カラム内クイック作成（Notionの「+ 新規」相当） ----
+function openComposer(col) {
+  const body = $(".col-body", col);
+  const existing = $(".composer textarea", body);
+  if (existing) { existing.focus(); return; }
+  const comp = el("div", "card composer");
+  const ta = document.createElement("textarea");
+  ta.placeholder = "新しいタスク…（Enterで追加 / Escで閉じる）";
+  comp.appendChild(ta);
+  body.prepend(comp);
+  ta.focus();
+
+  let busy = false;
+  const create = async (keepOpen) => {
+    const title = ta.value.trim();
+    if (!title || busy) return;
+    busy = true;
+    const status = col.dataset.status;
+    const inCol = state.tasks.filter((x) => x.status === status);
+    const created = await api("/api/tasks", {
+      method: "POST",
+      body: JSON.stringify({ title, project: state.project || "inbox", status }),
+    });
+    if (inCol.length) {
+      const minPos = Math.min(...inCol.map((x) => x.position));
+      await api(`/api/tasks/${created.id}`, {
+        method: "PATCH", body: JSON.stringify({ position: minPos - 1024 }),
+      });
+    }
+    await refresh();
+    busy = false;
+    if (keepOpen) openComposer(col);
+  };
+  ta.addEventListener("keydown", (e) => {
+    if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); create(true); }
+    else if (e.key === "Escape") { comp.remove(); }
+  });
+  ta.addEventListener("blur", () => {
+    if (busy) return;
+    if (ta.value.trim()) create(false);
+    else comp.remove();
+  });
+}
+document.querySelectorAll(".col").forEach((col) => {
+  $(".col-add", col).onclick = () => openComposer(col);
+});
+
+// ---- ドラッグ&ドロップ ----
 for (const [status, col] of Object.entries(cols)) {
   const body = $(".col-body", col);
   body.addEventListener("dragover", (e) => {
@@ -323,7 +601,7 @@ for (const [status, col] of Object.entries(cols)) {
     const t = state.dragging;
     if (!t) return;
     const cards = [...body.querySelectorAll(".card")].filter(
-      (c) => Number(c.dataset.id) !== t.id
+      (c) => !c.classList.contains("composer") && Number(c.dataset.id) !== t.id
     );
     let insertBefore = null;
     for (const c of cards) {
@@ -351,6 +629,7 @@ for (const [status, col] of Object.entries(cols)) {
   });
 }
 
+// ---- ヘッダー: クイック追加 / グループ ----
 $("#quickAddForm").addEventListener("submit", async (e) => {
   e.preventDefault();
   const input = $("#quickAdd");
@@ -384,68 +663,207 @@ $("#projectForm").addEventListener("submit", () => {
   refresh();
 });
 
-let editing = null;
-let creatingStatus = null;
-function openEditor(t) {
-  editing = t;
-  creatingStatus = null;
-  $("#editorHeading").textContent = "タスクを編集";
-  $("#editSubmit").textContent = "保存";
-  $("#editDelete").style.display = "";
-  $("#editTitle").value = t.title;
-  $("#editNotes").value = t.notes || "";
-  $("#editProject").value = t.project;
-  $("#editor").showModal();
+// ---- 詳細パネル ----
+const panel = $("#panel");
+let notesEditing = false;
+let notesCancel = false;
+
+function panelTask() {
+  return state.tasks.find((x) => x.id === state.panelId) || null;
 }
-function openCreator(status) {
-  editing = null;
-  creatingStatus = status;
-  $("#editorHeading").textContent = `タスクを追加（${status.toUpperCase()}）`;
-  $("#editSubmit").textContent = "追加";
-  $("#editDelete").style.display = "none";
-  $("#editTitle").value = "";
-  $("#editNotes").value = "";
-  $("#editProject").value = state.project || "inbox";
-  $("#editor").showModal();
-  $("#editTitle").focus();
+
+function openPanel(t) {
+  state.panelId = t.id;
+  panel.hidden = false;
+  notesEditing = false;
+  $("#notesEdit").hidden = true;
+  $("#notesHint").hidden = true;
+  $("#notesView").hidden = false;
+  syncPanel();
+  render();
 }
-document.querySelectorAll(".col").forEach((col) => {
-  $(".col-add", col).onclick = () => openCreator(col.dataset.status);
+
+function closePanel() {
+  state.panelId = null;
+  panel.hidden = true;
+  render();
+}
+
+function renderNotes(notes) {
+  const view = $("#notesView");
+  if (notes && notes.trim()) {
+    // mdRender は入力を全てエスケープ済み。DOM化して差し込む
+    const doc = new DOMParser().parseFromString(mdRender(notes), "text/html");
+    view.replaceChildren(...doc.body.childNodes);
+  } else {
+    view.replaceChildren(el("span", "placeholder", "クリックしてメモを追加…（Markdown対応）"));
+  }
+}
+
+function syncPanel() {
+  if (state.panelId == null) return;
+  const t = panelTask();
+  if (!t) { closePanel(); return; }
+  const ae = document.activeElement;
+  const set = (elm, val) => { if (elm !== ae) elm.value = val; };
+  set($("#panelTitle"), t.title);
+  autosize($("#panelTitle"));
+  set($("#propStatus"), t.status);
+  set($("#propPriority"), t.priority || "");
+  set($("#propProject"), t.project);
+  if (!notesEditing) renderNotes(t.notes);
+}
+
+async function patchPanel(fields) {
+  if (state.panelId == null) return;
+  await api(`/api/tasks/${state.panelId}`, {
+    method: "PATCH", body: JSON.stringify(fields),
+  });
+  await refresh();
+}
+
+$("#panelClose").onclick = () => closePanel();
+$("#panelDelete").onclick = () => { const t = panelTask(); if (t) removeTask(t); };
+
+const panelTitle = $("#panelTitle");
+panelTitle.addEventListener("input", () => autosize(panelTitle));
+panelTitle.addEventListener("keydown", (e) => {
+  if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); panelTitle.blur(); }
+  if (e.key === "Escape") { syncPanel(); panelTitle.blur(); }
 });
-$("#editCancel").onclick = () => $("#editor").close();
-$("#editDelete").onclick = async () => {
-  if (!editing) return;
-  if (!confirm(`削除しますか？\n「${editing.title}」`)) return;
-  await api(`/api/tasks/${editing.id}`, { method: "DELETE" });
-  editing = null;
-  $("#editor").close();
+panelTitle.addEventListener("blur", () => {
+  const t = panelTask();
+  if (!t) return;
+  const v = panelTitle.value.trim();
+  if (!v || v === t.title) { syncPanel(); return; }
+  patchPanel({ title: v });
+});
+
+$("#propStatus").addEventListener("change", (e) => patchPanel({ status: e.target.value }));
+$("#propPriority").addEventListener("change", (e) => patchPanel({ priority: e.target.value }));
+const propProject = $("#propProject");
+propProject.addEventListener("keydown", (e) => {
+  if (e.key === "Enter") { e.preventDefault(); propProject.blur(); }
+  if (e.key === "Escape") { syncPanel(); propProject.blur(); }
+});
+propProject.addEventListener("blur", () => {
+  const t = panelTask();
+  if (!t) return;
+  const v = propProject.value.trim() || "inbox";
+  if (v === t.project) return;
+  patchPanel({ project: v });
+});
+
+const notesView = $("#notesView");
+const notesEdit = $("#notesEdit");
+notesView.addEventListener("click", (e) => {
+  if (e.target.closest("a")) return;
+  const t = panelTask();
+  if (!t) return;
+  notesEditing = true;
+  notesView.hidden = true;
+  notesEdit.hidden = false;
+  $("#notesHint").hidden = false;
+  notesEdit.value = t.notes || "";
+  autosize(notesEdit);
+  notesEdit.focus();
+});
+notesEdit.addEventListener("input", () => autosize(notesEdit));
+notesEdit.addEventListener("keydown", (e) => {
+  if (e.key === "Escape") { notesCancel = true; notesEdit.blur(); }
+  if (e.key === "Enter" && (e.metaKey || e.ctrlKey)) { e.preventDefault(); notesEdit.blur(); }
+});
+notesEdit.addEventListener("blur", () => {
+  notesEditing = false;
+  notesEdit.hidden = true;
+  $("#notesHint").hidden = true;
+  notesView.hidden = false;
+  const t = panelTask();
+  if (notesCancel || !t) { notesCancel = false; syncPanel(); return; }
+  if (notesEdit.value === (t.notes || "")) { syncPanel(); return; }
+  patchPanel({ notes: notesEdit.value });
+});
+
+// ---- … メニュー ----
+const cardMenu = $("#cardMenu");
+let menuTask = null;
+function openMenu(anchor, t) {
+  menuTask = t;
+  $("#menuDone").style.display = t.status === "done" ? "none" : "";
+  cardMenu.hidden = false;
+  const r = anchor.getBoundingClientRect();
+  const mw = cardMenu.offsetWidth;
+  const mh = cardMenu.offsetHeight;
+  let x = r.left;
+  let y = r.bottom + 4;
+  if (x + mw > innerWidth - 8) x = innerWidth - mw - 8;
+  if (y + mh > innerHeight - 8) y = r.top - mh - 4;
+  cardMenu.style.left = `${x}px`;
+  cardMenu.style.top = `${y}px`;
+}
+function hideMenu() { cardMenu.hidden = true; menuTask = null; }
+document.addEventListener("click", (e) => {
+  if (!cardMenu.hidden && !e.target.closest("#cardMenu")) hideMenu();
+}, true);
+$("#menuDone").onclick = async () => {
+  const t = menuTask;
+  hideMenu();
+  if (!t) return;
+  await api(`/api/tasks/${t.id}`, { method: "PATCH", body: JSON.stringify({ status: "done" }) });
   refresh();
 };
-$("#editorForm").addEventListener("submit", async () => {
-  const payload = {
-    title: $("#editTitle").value.trim(),
-    notes: $("#editNotes").value,
-    project: $("#editProject").value.trim() || "inbox",
-  };
-  if (editing) {
-    await api(`/api/tasks/${editing.id}`, {
-      method: "PATCH",
-      body: JSON.stringify(payload),
-    });
-  } else if (creatingStatus) {
-    await api("/api/tasks", {
-      method: "POST",
-      body: JSON.stringify({ ...payload, status: creatingStatus }),
-    });
-  }
-  editing = null;
-  creatingStatus = null;
+$("#menuDelete").onclick = () => {
+  const t = menuTask;
+  hideMenu();
+  if (t) removeTask(t);
+};
+
+// ---- 削除 + 元に戻す（Notion風: 確認なし・Undo可能） ----
+const toast = $("#toast");
+let toastTimer = null;
+let lastDeleted = null;
+async function removeTask(t) {
+  await api(`/api/tasks/${t.id}`, { method: "DELETE" });
+  lastDeleted = t;
+  if (state.panelId === t.id) closePanel();
+  await refresh();
+  $(".msg", toast).textContent = `「${t.title}」を削除しました`;
+  toast.hidden = false;
+  clearTimeout(toastTimer);
+  toastTimer = setTimeout(() => { toast.hidden = true; }, 6000);
+}
+$("#toastUndo").onclick = async () => {
+  toast.hidden = true;
+  clearTimeout(toastTimer);
+  const t = lastDeleted;
+  lastDeleted = null;
+  if (!t) return;
+  await api("/api/tasks", {
+    method: "POST",
+    body: JSON.stringify({
+      title: t.title, notes: t.notes, project: t.project,
+      status: t.status, priority: t.priority || "",
+    }),
+  });
   refresh();
+};
+
+// ---- キーボード / ライブ更新 ----
+document.addEventListener("keydown", (e) => {
+  if (e.key !== "Escape") return;
+  if (!cardMenu.hidden) { hideMenu(); return; }
+  const ae = document.activeElement;
+  if (ae && (ae.isContentEditable || ["INPUT", "TEXTAREA"].includes(ae.tagName))) return;
+  if ($("#projectDialog").open) return;
+  if (!panel.hidden) closePanel();
 });
 
 const es = new EventSource("/api/events");
 es.onmessage = () => {
-  if (state.dragging || $("#editor").open || $("#projectDialog").open) return;
+  if (state.dragging) return;
+  if ($("#projectDialog").open) return;
+  const ae = document.activeElement;
+  if (ae && (ae.isContentEditable || ae.closest?.("#panel") || ae.closest?.(".composer"))) return;
   refresh();
 };
 

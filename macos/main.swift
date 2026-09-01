@@ -2,7 +2,17 @@ import Cocoa
 import WebKit
 
 @main
-class AppDelegate: NSObject, NSApplicationDelegate {
+class AppDelegate: NSObject, NSApplicationDelegate, WKUIDelegate {
+
+    // メモ内リンク (target="_blank") は既定ブラウザで開く
+    func webView(
+        _ webView: WKWebView, createWebViewWith configuration: WKWebViewConfiguration,
+        for navigationAction: WKNavigationAction, windowFeatures: WKWindowFeatures
+    ) -> WKWebView? {
+        if let url = navigationAction.request.url { NSWorkspace.shared.open(url) }
+        return nil
+    }
+
     static func main() {
         let app = NSApplication.shared
         let delegate = AppDelegate()
@@ -34,6 +44,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
 
         let config = WKWebViewConfiguration()
         webView = WKWebView(frame: rect, configuration: config)
+        webView.uiDelegate = self
         webView.autoresizingMask = [.width, .height]
         window.contentView = webView
         window.makeKeyAndOrderFront(nil)
