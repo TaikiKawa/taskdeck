@@ -13,8 +13,14 @@ let repoPath = "$REPO"
 EOF
 
 rm -rf "$APP"
-mkdir -p "$APP/Contents/MacOS"
+mkdir -p "$APP/Contents/MacOS" "$APP/Contents/Resources"
 cp Info.plist "$APP/Contents/Info.plist"
+
+# アプリアイコン (.icns) を生成して同梱
+ICONSET="$APP/Contents/Resources/AppIcon.iconset"
+swift make_icon.swift "$ICONSET"
+iconutil -c icns "$ICONSET" -o "$APP/Contents/Resources/AppIcon.icns"
+rm -rf "$ICONSET"
 
 swiftc -O -parse-as-library main.swift Config.swift \
   -framework Cocoa -framework WebKit \
