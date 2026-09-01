@@ -3,7 +3,7 @@
 import { execFile, spawn } from "node:child_process";
 import { existsSync, readFileSync, statSync, writeFileSync } from "node:fs";
 import { homedir } from "node:os";
-import { join } from "node:path";
+import { dirname, join } from "node:path";
 import { getTask, updateTask } from "./db.js";
 
 const dataDir = process.env.TASKDECK_DIR || join(homedir(), ".taskdeck");
@@ -76,20 +76,30 @@ async function resolveClaude() {
   if (claudeBin) return claudeBin;
   if (process.env.TASKDECK_CLAUDE) return (claudeBin = process.env.TASKDECK_CLAUDE);
   const candidates = [
+    // このサーバーを動かしている node と同じ bin (nodebrew/nvm 等のグローバルインストール先)
+    join(dirname(process.execPath), "claude"),
     join(homedir(), ".claude", "local", "claude"),
+    join(homedir(), ".nodebrew", "current", "bin", "claude"),
     "/opt/homebrew/bin/claude",
     "/usr/local/bin/claude",
     join(homedir(), ".local", "bin", "claude"),
+    join(homedir(), ".bun", "bin", "claude"),
+    join(homedir(), "Library", "pnpm", "claude"),
+    join(homedir(), ".volta", "bin", "claude"),
   ];
   for (const c of candidates) {
     if (existsSync(c)) return (claudeBin = c);
   }
-  const found = await new Promise((resolve) => {
-    execFile("/bin/zsh", ["-lc", "command -v claude"], (err, stdout) =>
-      resolve(err ? "" : stdout.trim().split("\n").pop())
-    );
-  });
-  if (found) return (claudeBin = found);
+  // .app 起動などPATHが素の環境向け: ログインシェル(-lc)、だめなら
+  // PATH設定が .zshrc にある場合に備えて対話シェル(-lic)でも探す
+  for (const flag of ["-lc", "-lic"]) {
+    const found = await new Promise((resolve) => {
+      execFile("/bin/zsh", [flag, "command -v claude"], { timeout: 8000 }, (err, stdout) =>
+        resolve(err ? "" : stdout.trim().split("\n").pop())
+      );
+    });
+    if (found && existsSync(found)) return (claudeBin = found);
+  }
   throw new Error(
     "claude CLI が見つかりません。環境変数 TASKDECK_CLAUDE にパスを設定してください"
   );
@@ -255,9 +265,14 @@ export async function dispatchTask(
   updateTask(id, { status: "doing" });
 
   // detached: 自前のプロセスグループにして、停止時にグループごと kill できるようにする
+  // PATH には claude と node の場所を前置する(.app 起動のサーバーはPATHが素のため。
+  // claude 本体が `#!/usr/bin/env node` で node を探すのにも必要)
   const proc = spawn(bin, args, {
     cwd,
-    env: process.env,
+    env: {
+      ...process.env,
+      PATH: [dirname(bin), dirname(process.execPath), process.env.PATH || ""].join(":"),
+    },
     stdio: ["pipe", "pipe", "pipe"],
     detached: true,
   });

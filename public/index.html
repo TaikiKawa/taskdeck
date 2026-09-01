@@ -538,7 +538,7 @@ function cardEl(t) {
     stopBtn.onclick = async (e) => {
       e.stopPropagation();
       try { await api(`/api/tasks/${t.id}/dispatch/stop`, { method: "POST" }); }
-      catch (err) { alert("停止に失敗: " + err.message); }
+      catch (err) { showToast("⚠️ 停止に失敗: " + err.message); }
       refresh();
     };
     meta.appendChild(stopBtn);
@@ -803,7 +803,7 @@ $("#dispatchForm").addEventListener("submit", async () => {
   } catch (err) {
     let msg = err.message;
     try { msg = JSON.parse(err.message).error || msg; } catch {}
-    alert("実行開始に失敗しました: " + msg);
+    showToast("⚠️ 実行開始に失敗しました: " + msg);
   }
   refresh();
 });
@@ -881,7 +881,7 @@ $("#panelDispatch").onclick = async () => {
   const run = state.runs[t.id];
   if (run?.status === "running") {
     try { await api(`/api/tasks/${t.id}/dispatch/stop`, { method: "POST" }); }
-    catch (err) { alert("停止に失敗: " + err.message); }
+    catch (err) { showToast("⚠️ 停止に失敗: " + err.message); }
     refresh();
   } else {
     openDispatchDialog(t);
@@ -1291,15 +1291,21 @@ $("#menuDelete").onclick = () => {
 const toast = $("#toast");
 let toastTimer = null;
 let lastDeleted = null;
+// 汎用トースト(WKWebViewでは alert() が表示されないため、通知は全てこれを使う)
+function showToast(msg, { undo = false } = {}) {
+  if (!undo) lastDeleted = null;
+  $("#toastUndo").style.display = undo ? "" : "none";
+  $(".msg", toast).textContent = msg;
+  toast.hidden = false;
+  clearTimeout(toastTimer);
+  toastTimer = setTimeout(() => { toast.hidden = true; }, 6000);
+}
 async function removeTask(t) {
   await api(`/api/tasks/${t.id}`, { method: "DELETE" });
   lastDeleted = t;
   if (state.panelId === t.id) closePanel();
   await refresh();
-  $(".msg", toast).textContent = `「${t.title}」を削除しました`;
-  toast.hidden = false;
-  clearTimeout(toastTimer);
-  toastTimer = setTimeout(() => { toast.hidden = true; }, 6000);
+  showToast(`「${t.title}」を削除しました`, { undo: true });
 }
 $("#toastUndo").onclick = async () => {
   toast.hidden = true;
