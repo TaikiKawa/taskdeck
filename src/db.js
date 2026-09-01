@@ -31,6 +31,10 @@ const columns = db.prepare("PRAGMA table_info(tasks)").all();
 if (!columns.some((c) => c.name === "priority")) {
   db.prepare("ALTER TABLE tasks ADD COLUMN priority TEXT NOT NULL DEFAULT ''").run();
 }
+if (!columns.some((c) => c.name === "origin_path")) {
+  // タスク登録元の作業ディレクトリ(Claudeセッションの --resume 実行に使う)
+  db.prepare("ALTER TABLE tasks ADD COLUMN origin_path TEXT").run();
+}
 
 const VALID_STATUS = new Set(["todo", "doing", "done"]);
 const VALID_PRIORITY = new Set(["", "high", "medium", "low"]);
@@ -42,17 +46,17 @@ function nextPosition(project, status) {
   return (row?.p ?? 0) + 1024;
 }
 
-export function addTask({ title, notes = "", project = "inbox", session = null, status = "todo", priority = "" }) {
+export function addTask({ title, notes = "", project = "inbox", session = null, status = "todo", priority = "", origin_path = null }) {
   if (!title || !title.trim()) throw new Error("title is required");
   if (!VALID_STATUS.has(status)) throw new Error(`invalid status: ${status}`);
   if (!VALID_PRIORITY.has(priority)) throw new Error(`invalid priority: ${priority}`);
   project = project.trim() || "inbox";
   const info = db
     .prepare(
-      `INSERT INTO tasks (title, notes, project, session, status, position, priority)
-       VALUES (?, ?, ?, ?, ?, ?, ?)`
+      `INSERT INTO tasks (title, notes, project, session, status, position, priority, origin_path)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?)`
     )
-    .run(title.trim(), notes, project, session, status, nextPosition(project, status), priority);
+    .run(title.trim(), notes, project, session, status, nextPosition(project, status), priority, origin_path);
   return getTask(info.lastInsertRowid);
 }
 
@@ -76,7 +80,7 @@ export function listTasks({ project, status, session, includeDone = true } = {})
 export function updateTask(id, fields) {
   const task = getTask(id);
   if (!task) throw new Error(`task ${id} not found`);
-  const allowed = ["title", "notes", "project", "session", "status", "position", "priority"];
+  const allowed = ["title", "notes", "project", "session", "status", "position", "priority", "origin_path"];
   const sets = [];
   const args = [];
   for (const key of allowed) {

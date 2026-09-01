@@ -326,6 +326,11 @@
   <form method="dialog" id="dispatchForm">
     <h3 style="margin:0 0 4px;font-size:15px;">🤖 Claude Codeに依頼</h3>
     <p id="dispatchTaskTitle" style="margin:6px 0 0;font-size:13px;color:var(--muted);"></p>
+    <label>実行モード</label>
+    <select id="dispatchSession" style="width:100%">
+      <option value="new">新規セッションで実行</option>
+      <option value="resume">登録元セッションの続きで実行（文脈を引き継ぐ）</option>
+    </select>
     <label>作業ディレクトリ（このプロジェクトのリポジトリ）</label>
     <input type="text" id="dispatchCwd" required autocomplete="off" spellcheck="false"
            placeholder="/Users/you/dev/repo">
@@ -750,17 +755,38 @@ $("#projectForm").addEventListener("submit", () => {
 
 // ---- Claude Code への dispatch ----
 let dispatchTarget = null;
+let dispatchProjectPath = "";
+const isClaudeSession = (s) => /^[0-9a-f]{8}-[0-9a-f-]{27}$/i.test(s || "");
+
+function syncDispatchCwd() {
+  const t = dispatchTarget;
+  if (!t) return;
+  const resume = $("#dispatchSession").value === "resume";
+  $("#dispatchCwd").value =
+    (resume && t.origin_path) || dispatchProjectPath || t.origin_path || "";
+}
+
 async function openDispatchDialog(t) {
   dispatchTarget = t;
+  dispatchProjectPath = "";
   $("#dispatchTaskTitle").textContent = `「${t.title}」 — ${t.project}`;
-  $("#dispatchCwd").value = "";
+  const sessionSel = $("#dispatchSession");
+  const canResume = isClaudeSession(t.session);
+  sessionSel.querySelector('option[value="resume"]').disabled = !canResume;
+  // 登録元セッションがあるタスクは「続きで実行」をデフォルトに
+  sessionSel.value = canResume ? "resume" : "new";
+  syncDispatchCwd();
   try {
     const paths = await api("/api/project-paths");
-    if (dispatchTarget === t && paths[t.project]) $("#dispatchCwd").value = paths[t.project];
+    if (dispatchTarget === t) {
+      dispatchProjectPath = paths[t.project] || "";
+      syncDispatchCwd();
+    }
   } catch {}
   $("#dispatchDialog").showModal();
   $("#dispatchCwd").focus();
 }
+$("#dispatchSession").addEventListener("change", syncDispatchCwd);
 $("#dispatchCancel").onclick = () => $("#dispatchDialog").close();
 $("#dispatchForm").addEventListener("submit", async () => {
   const t = dispatchTarget;
@@ -768,9 +794,10 @@ $("#dispatchForm").addEventListener("submit", async () => {
   if (!t) return;
   const cwd = $("#dispatchCwd").value.trim();
   const mode = $("#dispatchMode").value;
+  const resume = $("#dispatchSession").value === "resume";
   try {
     await api(`/api/tasks/${t.id}/dispatch`, {
-      method: "POST", body: JSON.stringify({ cwd, mode }),
+      method: "POST", body: JSON.stringify({ cwd, mode, resume }),
     });
   } catch (err) {
     let msg = err.message;

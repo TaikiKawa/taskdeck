@@ -106,15 +106,26 @@ const server = createServer(async (req, res) => {
         sendJson(res, 404, { error: `task ${id} not found` });
         return;
       }
+      // resume: 登録元セッションの続きとして実行する。
+      // セッションは登録元ディレクトリに保存されているため、cwd もそこを優先する。
+      const resumeSession =
+        body.resume && /^[0-9a-f]{8}-[0-9a-f-]{27}$/i.test(task.session || "")
+          ? task.session
+          : null;
+      if (body.resume && !resumeSession) {
+        sendJson(res, 400, { error: "このタスクには登録元セッションが記録されていません" });
+        return;
+      }
       const cwd =
         (body.cwd || "").trim() ||
+        (resumeSession && task.origin_path) ||
         loadProjectPaths()[task.project] ||
         guessProjectPath(task.project);
       if (!cwd) {
         sendJson(res, 400, { error: "作業ディレクトリが未設定です", code: "need_cwd" });
         return;
       }
-      const run = await dispatchTask(id, { cwd, mode: body.mode }, broadcast);
+      const run = await dispatchTask(id, { cwd, mode: body.mode, resumeSession }, broadcast);
       saveProjectPath(task.project, run.cwd);
       broadcast();
       sendJson(res, 202, run);

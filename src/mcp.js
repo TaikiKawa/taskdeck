@@ -11,6 +11,29 @@ import {
   updateTask,
 } from "./db.js";
 import { maybeRegisterProjectPath } from "./dispatch.js";
+import { readdirSync, statSync } from "node:fs";
+import { homedir } from "node:os";
+import { join } from "node:path";
+
+// 呼び出し元の Claude セッションIDを検出する。
+// このMCPサーバーはセッションの作業ディレクトリで起動されるため、
+// ~/.claude/projects/<dir> 直下で直近更新されたトランスクリプト(.jsonl)の
+// ファイル名 = 今まさに動いているセッションのUUID とみなす。
+function detectClaudeSession(cwd) {
+  if (process.env.CLAUDE_SESSION_ID) return process.env.CLAUDE_SESSION_ID;
+  try {
+    const dir = join(homedir(), ".claude", "projects", cwd.replace(/[^a-zA-Z0-9]/g, "-"));
+    const latest = readdirSync(dir)
+      .filter((f) => f.endsWith(".jsonl"))
+      .map((f) => ({ f, m: statSync(join(dir, f)).mtimeMs }))
+      .sort((a, b) => b.m - a.m)[0];
+    // 直近5分以内に動いているものだけ「呼び出し元」とみなす
+    if (!latest || Date.now() - latest.m > 5 * 60 * 1000) return null;
+    return latest.f.replace(/\.jsonl$/, "");
+  } catch {
+    return null;
+  }
+}
 
 const server = new McpServer({ name: "taskdeck", version: "0.1.0" });
 
@@ -42,12 +65,15 @@ server.tool(
     session: z.string().optional().describe("Optional session identifier for filtering"),
   },
   async ({ tasks, project, session }) => {
+    const cwd = process.cwd();
+    // session 未指定なら呼び出し元Claudeセッションを自動記録し、
+    // UI側で「登録元セッションの続きで実行(--resume)」できるようにする
+    const originSession = session ?? detectClaudeSession(cwd);
     const created = tasks.map((t) =>
-      addTask({ ...t, project, session })
+      addTask({ ...t, project, session: originSession, origin_path: cwd })
     );
-    // このMCPサーバーはセッションの作業ディレクトリで起動されるため、
-    // cwd をプロジェクトのリポジトリとして自動で紐付ける(UIの🤖依頼で使用)
-    maybeRegisterProjectPath(project ?? created[0]?.project, process.cwd());
+    // cwd をプロジェクトのリポジトリとしても自動で紐付ける(UIの🤖依頼で使用)
+    maybeRegisterProjectPath(project ?? created[0]?.project, cwd);
     return json(created);
   }
 );

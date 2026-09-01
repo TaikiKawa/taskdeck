@@ -115,9 +115,12 @@ function notesToText(notes) {
     .trim();
 }
 
-function buildPrompt(task) {
+function buildPrompt(task, { resume = false } = {}) {
   const notes = notesToText(task.notes);
-  return `taskdeck のカンバンボードからタスクを任されました。以下のタスクを完了してください。
+  const lead = resume
+    ? `このセッションで扱っていた taskdeck のタスクの続きを任されました。これまでの文脈を踏まえて、以下のタスクを完了してください。`
+    : `taskdeck のカンバンボードからタスクを任されました。以下のタスクを完了してください。`;
+  return `${lead}
 
 # タスク
 - taskdeck ID: ${task.id}
@@ -212,7 +215,11 @@ function finishRun(run, error, onChange) {
   }, RUN_LINGER_MS).unref?.();
 }
 
-export async function dispatchTask(id, { cwd, mode = "safe" } = {}, onChange = () => {}) {
+export async function dispatchTask(
+  id,
+  { cwd, mode = "safe", resumeSession = null } = {},
+  onChange = () => {}
+) {
   const task = getTask(id);
   if (!task) throw new Error(`task ${id} not found`);
   if (runs.get(id)?.status === "running") throw new Error("このタスクは既にClaudeが実行中です");
@@ -224,6 +231,7 @@ export async function dispatchTask(id, { cwd, mode = "safe" } = {}, onChange = (
   const bin = await resolveClaude();
 
   const args = ["-p", "--output-format", "stream-json", "--verbose"];
+  if (resumeSession) args.push("--resume", resumeSession);
   if (mode === "full") args.push("--dangerously-skip-permissions");
   else args.push("--permission-mode", "acceptEdits");
 
@@ -231,6 +239,7 @@ export async function dispatchTask(id, { cwd, mode = "safe" } = {}, onChange = (
   const run = {
     taskId: id,
     session,
+    resumeSession,
     status: "running",
     mode,
     cwd,
@@ -242,7 +251,8 @@ export async function dispatchTask(id, { cwd, mode = "safe" } = {}, onChange = (
     stopRequested: false,
   };
   runs.set(id, run);
-  updateTask(id, { status: "doing", session });
+  // session カラムは「登録元セッションID」を保持したいので上書きしない
+  updateTask(id, { status: "doing" });
 
   // detached: 自前のプロセスグループにして、停止時にグループごと kill できるようにする
   const proc = spawn(bin, args, {
@@ -253,7 +263,7 @@ export async function dispatchTask(id, { cwd, mode = "safe" } = {}, onChange = (
   });
   run.proc = proc;
   proc.stdin.on("error", () => {}); // 起動失敗時の EPIPE を握りつぶす
-  proc.stdin.end(buildPrompt(task));
+  proc.stdin.end(buildPrompt(task, { resume: !!resumeSession }));
 
   let stderrBuf = "";
   proc.stderr.on("data", (d) => {
