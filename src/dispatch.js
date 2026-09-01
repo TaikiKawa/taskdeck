@@ -33,6 +33,39 @@ export function expandHome(p) {
   return p.replace(/^~(?=\/|$)/, homedir());
 }
 
+// タスク登録時に呼ばれる自動紐付け。呼び出し元(MCPサーバー)の cwd を
+// プロジェクトの作業ディレクトリとして記録する。既存の紐付けは上書きしない。
+export function maybeRegisterProjectPath(project, cwd) {
+  try {
+    project = (project || "").trim();
+    if (!project || project === "inbox") return;
+    if (!cwd || cwd === "/" || cwd === homedir()) return;
+    if (!existsSync(cwd) || !statSync(cwd).isDirectory()) return;
+    if (loadProjectPaths()[project]) return;
+    saveProjectPath(project, cwd);
+  } catch {
+    // 紐付けは補助機能なので失敗しても本体処理は続行
+  }
+}
+
+// 未登録プロジェクトのリポジトリ位置を推測する。
+// TASKDECK_REPO_ROOTS(コロン区切り、デフォルト ~/dev:~)配下に
+// プロジェクト名と同名の git リポジトリがあればそれを返す。
+const REPO_ROOTS = (process.env.TASKDECK_REPO_ROOTS || "~/dev:~")
+  .split(":")
+  .filter(Boolean);
+
+export function guessProjectPath(project) {
+  if (!project || project === "inbox") return null;
+  for (const root of REPO_ROOTS) {
+    const p = join(expandHome(root), project);
+    try {
+      if (statSync(p).isDirectory() && existsSync(join(p, ".git"))) return p;
+    } catch {}
+  }
+  return null;
+}
+
 // ---- claude CLI の場所を解決 ----
 // .app から起動されたサーバーは素の PATH しか持たないため、既知の場所 →
 // ログインシェルの順で探す。

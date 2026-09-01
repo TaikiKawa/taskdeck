@@ -13,6 +13,7 @@ import {
 } from "./db.js";
 import {
   dispatchTask,
+  guessProjectPath,
   listRuns,
   loadProjectPaths,
   saveProjectPath,
@@ -85,7 +86,15 @@ const server = createServer(async (req, res) => {
       return;
     }
     if (req.method === "GET" && pathname === "/api/project-paths") {
-      sendJson(res, 200, loadProjectPaths());
+      // 保存済みの紐付けに、未登録プロジェクトのリポジトリ推測を合成して返す
+      const merged = { ...loadProjectPaths() };
+      for (const { project } of listProjects()) {
+        if (!merged[project]) {
+          const guess = guessProjectPath(project);
+          if (guess) merged[project] = guess;
+        }
+      }
+      sendJson(res, 200, merged);
       return;
     }
     const dispatchMatch = pathname.match(/^\/api\/tasks\/(\d+)\/dispatch$/);
@@ -97,7 +106,10 @@ const server = createServer(async (req, res) => {
         sendJson(res, 404, { error: `task ${id} not found` });
         return;
       }
-      const cwd = (body.cwd || "").trim() || loadProjectPaths()[task.project];
+      const cwd =
+        (body.cwd || "").trim() ||
+        loadProjectPaths()[task.project] ||
+        guessProjectPath(task.project);
       if (!cwd) {
         sendJson(res, 400, { error: "作業ディレクトリが未設定です", code: "need_cwd" });
         return;

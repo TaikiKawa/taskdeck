@@ -10,6 +10,7 @@ import {
   listTasks,
   updateTask,
 } from "./db.js";
+import { maybeRegisterProjectPath } from "./dispatch.js";
 
 const server = new McpServer({ name: "taskdeck", version: "0.1.0" });
 
@@ -44,6 +45,9 @@ server.tool(
     const created = tasks.map((t) =>
       addTask({ ...t, project, session })
     );
+    // このMCPサーバーはセッションの作業ディレクトリで起動されるため、
+    // cwd をプロジェクトのリポジトリとして自動で紐付ける(UIの🤖依頼で使用)
+    maybeRegisterProjectPath(project ?? created[0]?.project, process.cwd());
     return json(created);
   }
 );

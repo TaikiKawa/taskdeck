@@ -82,6 +82,10 @@ args = ["/Users/taiki/dev/taskdeck/src/mcp.js"]
 1. カードにホバー → 🤖 をクリック
 2. 作業ディレクトリ（そのプロジェクトのリポジトリ）を指定
    - 一度指定すると `~/.taskdeck/projects.json` に保存され、次回から自動入力
+   - Claude が MCP の `task_add` でタスクを登録すると、そのセッションの
+     作業ディレクトリが自動で紐付くため、通常は入力不要
+   - 未登録でも `~/dev/<プロジェクト名>` や `~/<プロジェクト名>` に同名の
+     git リポジトリがあれば自動で推測して入力（探索先は `TASKDECK_REPO_ROOTS` で変更可）
 3. 権限モードを選んで実行
    - **安全**: ファイル編集のみ自動許可（`--permission-mode acceptEdits`）
    - **全自動**: すべて許可（`--dangerously-skip-permissions`）。信頼できるタスクのみ
@@ -100,3 +104,4 @@ taskdeck MCP を登録済みなら、Claude 自身が着手時に doing / 完了
 - `TASKDECK_DIR` — DBの保存先ディレクトリ（デフォルト `~/.taskdeck`）
 - `TASKDECK_CLAUDE` — claude CLI のパス（未設定なら自動検出）
 - `TASKDECK_RUN_TIMEOUT_MS` — Claude実行のタイムアウト（デフォルト30分）
+- `TASKDECK_REPO_ROOTS` — リポジトリ推測の探索先（コロン区切り、デフォルト `~/dev:~`）
