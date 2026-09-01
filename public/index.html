@@ -254,6 +254,10 @@
 <header>
   <h1>task<span>deck</span></h1>
   <select id="projectFilter" title="プロジェクト"></select>
+  <select id="sortMode" title="並び順">
+    <option value="manual">手動順</option>
+    <option value="priority">優先度順</option>
+  </select>
   <button type="button" class="ghost" id="newProjectBtn" title="新しいグループを作成">＋ グループ</button>
   <form id="quickAddForm" style="display:contents">
     <input id="quickAdd" type="text" autocomplete="off" placeholder="タスクを追加（先頭に #プロジェクト名 でグループ指定）">
@@ -380,9 +384,17 @@ function saveExtraProjects() {
   try { localStorage.setItem(EXTRA_PROJECTS_KEY, JSON.stringify([...state.extraProjects])); }
   catch {}
 }
+const SORT_MODE_KEY = "taskdeck.sortMode";
+function loadSortMode() {
+  try {
+    const v = localStorage.getItem(SORT_MODE_KEY);
+    return v === "priority" ? "priority" : "manual";
+  } catch { return "manual"; }
+}
 const state = {
   tasks: [], project: "", dragging: null,
   extraProjects: loadExtraProjects(), panelId: null, runs: {},
+  sortMode: loadSortMode(),
 };
 const $ = (sel, el = document) => el.querySelector(sel);
 const cols = {};
@@ -446,13 +458,30 @@ function renderProjects(projects) {
   if (sel.value !== current) { state.project = ""; sel.value = ""; }
 }
 
+const PRIORITY_RANK = { high: 0, medium: 1, low: 2, "": 3 };
+function sortForColumn(tasks, status) {
+  const arr = [...tasks];
+  if (state.sortMode === "priority") {
+    if (status === "done") {
+      // Done は最近完了したものが上（done_at がない古いデータは末尾）
+      arr.sort((a, b) =>
+        (b.done_at || "").localeCompare(a.done_at || "") || b.id - a.id);
+    } else {
+      arr.sort((a, b) =>
+        (PRIORITY_RANK[a.priority || ""] ?? 3) - (PRIORITY_RANK[b.priority || ""] ?? 3) ||
+        a.position - b.position || a.id - b.id);
+    }
+  } else {
+    arr.sort((a, b) => a.position - b.position || a.id - b.id);
+  }
+  return arr;
+}
+
 function render() {
   for (const [status, col] of Object.entries(cols)) {
     const body = $(".col-body", col);
     body.replaceChildren();
-    const tasks = state.tasks
-      .filter((t) => t.status === status)
-      .sort((a, b) => a.position - b.position || a.id - b.id);
+    const tasks = sortForColumn(state.tasks.filter((t) => t.status === status), status);
     $(".count", col).textContent = tasks.length;
     if (!tasks.length) body.appendChild(el("div", "empty", "タスクなし"));
     for (const t of tasks) body.appendChild(cardEl(t));
@@ -698,6 +727,17 @@ for (const [status, col] of Object.entries(cols)) {
     body.classList.remove("dragover");
     const t = state.dragging;
     if (!t) return;
+    if (state.sortMode === "priority") {
+      // 優先度順モードでは並びは自動なので、カラム間移動（ステータス変更）だけ反映する
+      if (t.status !== status) {
+        await api(`/api/tasks/${t.id}`, {
+          method: "PATCH",
+          body: JSON.stringify({ status }),
+        });
+        refresh();
+      }
+      return;
+    }
     const cards = [...body.querySelectorAll(".card")].filter(
       (c) => !c.classList.contains("composer") && Number(c.dataset.id) !== t.id
     );
@@ -744,6 +784,13 @@ $("#quickAddForm").addEventListener("submit", async (e) => {
 $("#projectFilter").addEventListener("change", (e) => {
   state.project = e.target.value;
   refresh();
+});
+
+$("#sortMode").value = state.sortMode;
+$("#sortMode").addEventListener("change", (e) => {
+  state.sortMode = e.target.value;
+  try { localStorage.setItem(SORT_MODE_KEY, state.sortMode); } catch {}
+  render();
 });
 
 $("#newProjectBtn").onclick = () => {
