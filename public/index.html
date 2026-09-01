@@ -85,6 +85,13 @@
   }
   .icon-btn:hover { color: var(--text); background: var(--accent-soft); }
   .icon-btn.del:hover { color: var(--danger); }
+  .col-head .spacer { flex: 1; }
+  .col-add {
+    background: var(--panel); border: 1px solid var(--border); color: var(--muted);
+    border-radius: 8px; width: 24px; height: 24px; font-size: 15px; line-height: 1;
+    cursor: pointer; display: flex; align-items: center; justify-content: center;
+  }
+  .col-add:hover { color: var(--accent); border-color: var(--accent); }
   dialog {
     background: var(--panel); color: var(--text); border: 1px solid var(--border);
     border-radius: 14px; padding: 20px; width: min(480px, 92vw);
@@ -99,10 +106,16 @@
   }
   dialog textarea { min-height: 110px; resize: vertical; }
   .dialog-actions { display: flex; gap: 8px; margin-top: 18px; justify-content: flex-end; }
+  .dialog-actions .spacer { flex: 1; }
   button.primary {
     background: var(--accent); color: #fff; border: none; border-radius: 8px;
     padding: 9px 18px; font-size: 13px; cursor: pointer;
   }
+  button.danger {
+    background: none; border: 1px solid var(--danger); color: var(--danger);
+    border-radius: 8px; padding: 9px 14px; font-size: 13px; cursor: pointer;
+  }
+  button.danger:hover { background: var(--danger); color: #fff; }
   button.ghost {
     background: none; border: 1px solid var(--border); color: var(--text);
     border-radius: 8px; padding: 9px 14px; font-size: 13px; cursor: pointer;
@@ -114,27 +127,30 @@
 <header>
   <h1>task<span>deck</span></h1>
   <select id="projectFilter" title="プロジェクト"></select>
+  <button type="button" class="ghost" id="newProjectBtn" title="新しいグループを作成">＋ グループ</button>
   <form id="quickAddForm" style="display:contents">
-    <input id="quickAdd" type="text" autocomplete="off" placeholder="タスクを追加して Enter（先頭に #プロジェクト名 でグループ指定）">
+    <input id="quickAdd" type="text" autocomplete="off" placeholder="タスクを追加（先頭に #プロジェクト名 でグループ指定）">
+    <button type="submit" class="primary">＋ 追加</button>
   </form>
 </header>
 <main>
   <section class="col" data-status="todo">
-    <div class="col-head">Todo <span class="count"></span></div>
+    <div class="col-head">Todo <span class="count"></span><span class="spacer"></span><button class="col-add" title="このカラムにタスクを追加">＋</button></div>
     <div class="col-body"></div>
   </section>
   <section class="col" data-status="doing">
-    <div class="col-head">Doing <span class="count"></span></div>
+    <div class="col-head">Doing <span class="count"></span><span class="spacer"></span><button class="col-add" title="このカラムにタスクを追加">＋</button></div>
     <div class="col-body"></div>
   </section>
   <section class="col" data-status="done">
-    <div class="col-head">Done <span class="count"></span></div>
+    <div class="col-head">Done <span class="count"></span><span class="spacer"></span><button class="col-add" title="このカラムにタスクを追加">＋</button></div>
     <div class="col-body"></div>
   </section>
 </main>
 
 <dialog id="editor">
   <form method="dialog" id="editorForm">
+    <h3 id="editorHeading" style="margin:0 0 4px;font-size:15px;"></h3>
     <label>タイトル</label>
     <input type="text" id="editTitle" required>
     <label>メモ</label>
@@ -142,14 +158,37 @@
     <label>プロジェクト</label>
     <input type="text" id="editProject">
     <div class="dialog-actions">
+      <button type="button" class="danger" id="editDelete">削除</button>
+      <span class="spacer"></span>
       <button type="button" class="ghost" id="editCancel">キャンセル</button>
-      <button type="submit" class="primary">保存</button>
+      <button type="submit" class="primary" id="editSubmit">保存</button>
+    </div>
+  </form>
+</dialog>
+
+<dialog id="projectDialog">
+  <form method="dialog" id="projectForm">
+    <h3 style="margin:0 0 4px;font-size:15px;">グループを作成</h3>
+    <label>グループ名</label>
+    <input type="text" id="newProjectName" required autocomplete="off" placeholder="例: work">
+    <div class="dialog-actions">
+      <button type="button" class="ghost" id="projectCancel">キャンセル</button>
+      <button type="submit" class="primary">作成</button>
     </div>
   </form>
 </dialog>
 
 <script>
-const state = { tasks: [], project: "", dragging: null };
+const EXTRA_PROJECTS_KEY = "taskdeck.extraProjects";
+function loadExtraProjects() {
+  try { return new Set(JSON.parse(localStorage.getItem(EXTRA_PROJECTS_KEY) || "[]")); }
+  catch { return new Set(); }
+}
+function saveExtraProjects() {
+  try { localStorage.setItem(EXTRA_PROJECTS_KEY, JSON.stringify([...state.extraProjects])); }
+  catch {}
+}
+const state = { tasks: [], project: "", dragging: null, extraProjects: loadExtraProjects() };
 const $ = (sel, el = document) => el.querySelector(sel);
 const cols = {};
 document.querySelectorAll(".col").forEach((c) => (cols[c.dataset.status] = c));
@@ -184,10 +223,20 @@ async function refresh() {
 function renderProjects(projects) {
   const sel = $("#projectFilter");
   const current = state.project;
+  // タスクが付いてサーバー側に現れたグループは、ローカル保持分から外す
+  const known = new Set(projects.map((p) => p.project));
+  let changed = false;
+  for (const name of state.extraProjects) {
+    if (known.has(name)) { state.extraProjects.delete(name); changed = true; }
+  }
+  if (changed) saveExtraProjects();
   sel.replaceChildren();
   sel.add(new Option(`すべて (${projects.reduce((a, p) => a + p.open, 0)})`, ""));
   for (const p of projects) {
     sel.add(new Option(`${p.project} (${p.open})`, p.project));
+  }
+  for (const name of [...state.extraProjects].sort()) {
+    sel.add(new Option(`${name} (0)`, name));
   }
   sel.value = current;
   if (sel.value !== current) { state.project = ""; sel.value = ""; }
@@ -320,32 +369,83 @@ $("#projectFilter").addEventListener("change", (e) => {
   refresh();
 });
 
+$("#newProjectBtn").onclick = () => {
+  $("#newProjectName").value = "";
+  $("#projectDialog").showModal();
+  $("#newProjectName").focus();
+};
+$("#projectCancel").onclick = () => $("#projectDialog").close();
+$("#projectForm").addEventListener("submit", () => {
+  const name = $("#newProjectName").value.trim().replace(/^#/, "");
+  if (!name) return;
+  state.extraProjects.add(name);
+  saveExtraProjects();
+  state.project = name;
+  refresh();
+});
+
 let editing = null;
+let creatingStatus = null;
 function openEditor(t) {
   editing = t;
+  creatingStatus = null;
+  $("#editorHeading").textContent = "タスクを編集";
+  $("#editSubmit").textContent = "保存";
+  $("#editDelete").style.display = "";
   $("#editTitle").value = t.title;
   $("#editNotes").value = t.notes || "";
   $("#editProject").value = t.project;
   $("#editor").showModal();
 }
-$("#editCancel").onclick = () => $("#editor").close();
-$("#editorForm").addEventListener("submit", async () => {
-  if (!editing) return;
-  await api(`/api/tasks/${editing.id}`, {
-    method: "PATCH",
-    body: JSON.stringify({
-      title: $("#editTitle").value.trim(),
-      notes: $("#editNotes").value,
-      project: $("#editProject").value.trim() || "inbox",
-    }),
-  });
+function openCreator(status) {
   editing = null;
+  creatingStatus = status;
+  $("#editorHeading").textContent = `タスクを追加（${status.toUpperCase()}）`;
+  $("#editSubmit").textContent = "追加";
+  $("#editDelete").style.display = "none";
+  $("#editTitle").value = "";
+  $("#editNotes").value = "";
+  $("#editProject").value = state.project || "inbox";
+  $("#editor").showModal();
+  $("#editTitle").focus();
+}
+document.querySelectorAll(".col").forEach((col) => {
+  $(".col-add", col).onclick = () => openCreator(col.dataset.status);
+});
+$("#editCancel").onclick = () => $("#editor").close();
+$("#editDelete").onclick = async () => {
+  if (!editing) return;
+  if (!confirm(`削除しますか？\n「${editing.title}」`)) return;
+  await api(`/api/tasks/${editing.id}`, { method: "DELETE" });
+  editing = null;
+  $("#editor").close();
+  refresh();
+};
+$("#editorForm").addEventListener("submit", async () => {
+  const payload = {
+    title: $("#editTitle").value.trim(),
+    notes: $("#editNotes").value,
+    project: $("#editProject").value.trim() || "inbox",
+  };
+  if (editing) {
+    await api(`/api/tasks/${editing.id}`, {
+      method: "PATCH",
+      body: JSON.stringify(payload),
+    });
+  } else if (creatingStatus) {
+    await api("/api/tasks", {
+      method: "POST",
+      body: JSON.stringify({ ...payload, status: creatingStatus }),
+    });
+  }
+  editing = null;
+  creatingStatus = null;
   refresh();
 });
 
 const es = new EventSource("/api/events");
 es.onmessage = () => {
-  if (state.dragging || $("#editor").open) return;
+  if (state.dragging || $("#editor").open || $("#projectDialog").open) return;
   refresh();
 };
 
