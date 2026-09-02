@@ -11,7 +11,10 @@ const dataDir = mkdtempSync(join(tmpdir(), "taskdeck-test-"));
 process.env.TASKDECK_DIR = dataDir;
 const { buildPrompt, TASK_FENCE_OPEN, TASK_FENCE_CLOSE } = await import("../src/dispatch.js");
 
-after(() => rmSync(dataDir, { recursive: true, force: true }));
+// Windows では開いたままの tasks.db を消せない (EBUSY) ので、後片付けの失敗は無視する
+after(() => {
+  try { rmSync(dataDir, { recursive: true, force: true }); } catch {}
+});
 
 const base = { id: 7, project: "demo", title: "README を直す", notes: "" };
 
