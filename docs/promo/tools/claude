@@ -1,0 +1,4 @@
+#!/bin/bash
+# Demo stand-in for the claude CLI: reads the taskdeck prompt from stdin, waits,
+# marks the task done through the demo server API, and prints stream-json like claude -p.
+exec /Users/taiki/.nodebrew/current/bin/node "$(dirname "$0")/fake-claude.mjs" "$@"
