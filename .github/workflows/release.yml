@@ -24,10 +24,25 @@ env:
   NODE_VERSION: "22"
 
 jobs:
+  # 署名用 secrets が無いときは macOS ジョブを丸ごとスキップする。
+  # (ad-hoc 署名の zip を Release に載せると、手元で公証した同名の zip を上書きしてしまうため)
+  prep:
+    runs-on: ubuntu-latest
+    outputs:
+      mac_signing: ${{ steps.chk.outputs.mac_signing }}
+    steps:
+      - id: chk
+        env:
+          P12: ${{ secrets.MACOS_CERTIFICATE_P12 }}
+        run: |
+          if [ -n "$P12" ]; then echo "mac_signing=true" >> "$GITHUB_OUTPUT"; else echo "mac_signing=false" >> "$GITHUB_OUTPUT"; fi
+
   mac:
+    needs: prep
+    if: needs.prep.outputs.mac_signing == 'true'
     runs-on: macos-14
     env:
-      HAS_CERT: ${{ secrets.MACOS_CERTIFICATE_P12 != '' }}
+      HAS_CERT: "true"
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
@@ -86,8 +101,12 @@ jobs:
           if-no-files-found: error
 
   release:
-    needs: [mac, windows]
-    if: startsWith(github.ref, 'refs/tags/v')
+    needs: [prep, mac, windows]
+    # mac がスキップされても Windows だけで Release を作る (macOS zip は手元で公証したものを添付する)
+    if: >-
+      always() && startsWith(github.ref, 'refs/tags/v') &&
+      needs.windows.result == 'success' &&
+      (needs.mac.result == 'success' || needs.mac.result == 'skipped')
     runs-on: ubuntu-latest
     steps:
       - uses: actions/download-artifact@v4
@@ -102,3 +121,5 @@ jobs:
             dist/*.zip
             dist/SHA256SUMS.txt
           generate_release_notes: true
+          # 手元で公証して先に添付した macOS zip を CI が上書きしないようにする
+          overwrite_files: false

@@ -22,8 +22,9 @@
 **macOS**: zip を展開して `taskdeck.app` を「アプリケーション」フォルダへ入れて開く。
 メニューの **Claude → Claude Code に MCP を登録…** で MCP 登録まで完了する
 （`claude` CLI が無い環境では登録コマンドがクリップボードにコピーされる）。
-Developer ID で署名・公証済みでないビルドは Gatekeeper に止められるので、その場合は
-右クリック → 「開く」、または `xattr -d com.apple.quarantine taskdeck.app` で解除する。
+Releases の zip は Developer ID（Alche, inc.）で署名・公証済みなのでそのまま開ける。
+自分でビルドした未署名の `.app` は Gatekeeper に止められるので、右クリック → 「開く」、
+または `xattr -d com.apple.quarantine taskdeck.app` で解除する。
 
 **Windows**: zip を展開したフォルダ（例: `C:\Users\<あなた>\TaskDeck`）で PowerShell を開き、
 
@@ -186,7 +187,9 @@ node scripts/package.mjs --platform win32  --arch x64         # dist/taskdeck-<v
   `NOTARY_PROFILE=<notarytool のプロファイル名>`（または `APPLE_ID` / `APPLE_TEAM_ID` / `APPLE_APP_PASSWORD`）。
   未指定なら ad-hoc 署名になり、配布先で Gatekeeper の解除が必要
 - タグ `v*` を push すると [.github/workflows/release.yml](.github/workflows/release.yml) が
-  macOS / Windows 両方をビルドして GitHub Release に添付する（署名用 secrets はワークフロー冒頭のコメント参照）
+  Windows 版をビルドして GitHub Release に添付する。macOS 版は署名用 secrets（ワークフロー冒頭のコメント参照）が
+  登録されているときだけ CI でビルドし、無いときはスキップされるので、手元で公証した zip を
+  `gh release upload v<ver> dist/taskdeck-<ver>-mac-universal.zip` で添付する
 
 ```bash
 git tag v0.1.0 && git push origin v0.1.0
