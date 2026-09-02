@@ -23,6 +23,10 @@ import { join } from "node:path";
 function detectClaudeSession(cwd) {
   if (process.env.CLAUDE_SESSION_ID) return process.env.CLAUDE_SESSION_ID;
   try {
+    // Claude Code は cwd の英数字以外を "-" に置換したディレクトリ名を使う。
+    // Windows でも同じ規則で、"C:\Users\taiki\dev\taskdeck" は
+    // "C--Users-taiki-dev-taskdeck" になる (":" と "\" がそれぞれ "-")。
+    // process.cwd() は Windows でバックスラッシュ区切りを返すのでそのまま置換すればよい。
     const dir = join(homedir(), ".claude", "projects", cwd.replace(/[^a-zA-Z0-9]/g, "-"));
     const latest = readdirSync(dir)
       .filter((f) => f.endsWith(".jsonl"))

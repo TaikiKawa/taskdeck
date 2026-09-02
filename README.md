@@ -7,6 +7,9 @@
 - **AI側**: MCPサーバー（stdio）でタスクの追加・一覧・完了・削除
 - グループ管理は `project` フィールド（レポジトリ名などを入れる）で行う
 
+> 社内向けの手順書（Mac / Windows / MCP 登録 / トラブルシュート）は [docs/SETUP.md](docs/SETUP.md)。
+> 紹介動画と台本は [docs/promo/](docs/promo/)。
+
 ## セットアップ
 
 ```bash
@@ -46,7 +49,18 @@ npm run ui
 ## Claude Code に MCP を登録
 
 ```bash
-claude mcp add --scope user taskdeck -- node /Users/taiki/dev/taskdeck/src/mcp.js
+npm run mcp:register
+```
+
+リポジトリの絶対パスを解決して `claude mcp add --scope user taskdeck -- node <path>/src/mcp.js`
+を実行する（macOS / Linux / Windows 共通）。`claude` が見つからない場合や
+`npm run mcp:register -- --print` を付けた場合は、貼り付け用のコマンドと
+Claude Desktop（`claude_desktop_config.json`）・Codex（`config.toml`）の設定例を表示するだけで終わる。
+
+手で登録する場合の例（パスは clone した場所に読み替え）:
+
+```bash
+claude mcp add --scope user taskdeck -- node /path/to/taskdeck/src/mcp.js
 ```
 
 Codex CLI の場合は `~/.codex/config.toml` に:
@@ -54,8 +68,21 @@ Codex CLI の場合は `~/.codex/config.toml` に:
 ```toml
 [mcp_servers.taskdeck]
 command = "node"
-args = ["/Users/taiki/dev/taskdeck/src/mcp.js"]
+args = ["/path/to/taskdeck/src/mcp.js"]
 ```
+
+## Windows で使う
+
+PowerShell + Edge/Chrome のアプリモードで Mac 版に近い体験にできる。
+セットアップ・起動・停止の手順は [windows/README.md](windows/README.md) を参照。
+
+```powershell
+powershell -ExecutionPolicy Bypass -File windows\install.ps1   # npm install + ショートカット作成
+```
+
+- 🤖 ボタンの「バックグラウンドで実行」は `claude.cmd`（npm -g）/ `claude.exe`（公式インストーラ）を自動検出
+- 「デスクトップアプリで開く」の `claude://` リンクは `rundll32 url.dll,FileProtocolHandler` で開く
+- `TASKDECK_REPO_ROOTS` は Windows ではセミコロン区切り（下記参照）
 
 ## MCP ツール
 
@@ -117,7 +144,7 @@ taskdeck MCP を登録済みなら、Claude 自身が着手時に doing / 完了
 ボード上でそのまま進捗が見える。
 
 - 仕組み: サーバーが `claude -p --output-format stream-json` を headless 起動（同一タスクの多重実行は不可、デフォルト30分でタイムアウト）
-- claude CLI の場所は既知のパス→ログインシェルの順で自動検出（明示するなら `TASKDECK_CLAUDE`）
+- claude CLI の場所は既知のパス→ログインシェル（Windows は `where claude`）の順で自動検出（明示するなら `TASKDECK_CLAUDE`）
 
 ## 環境変数
 
@@ -125,4 +152,6 @@ taskdeck MCP を登録済みなら、Claude 自身が着手時に doing / 完了
 - `TASKDECK_DIR` — DBの保存先ディレクトリ（デフォルト `~/.taskdeck`）
 - `TASKDECK_CLAUDE` — claude CLI のパス（未設定なら自動検出）
 - `TASKDECK_RUN_TIMEOUT_MS` — Claude実行のタイムアウト（デフォルト30分）
-- `TASKDECK_REPO_ROOTS` — リポジトリ推測の探索先（コロン区切り、デフォルト `~/dev:~`）
+- `TASKDECK_REPO_ROOTS` — リポジトリ推測の探索先。区切りは PATH と同じ（macOS/Linux はコロン `~/dev:~`、
+  Windows はセミコロン `C:\dev;%USERPROFILE%`）。デフォルトは `~/dev` と `~`。`~\dev` のような Windows 形式も可
+- `TASKDECK_NODE` — アプリ起動時に使う node のパス（macOS の `.app` / Windows の `taskdeck.ps1` が参照）

@@ -6,7 +6,8 @@
   "private": true,
   "scripts": {
     "ui": "node src/server.js",
-    "mcp": "node src/mcp.js"
+    "mcp": "node src/mcp.js",
+    "mcp:register": "node scripts/register-mcp.js"
   },
   "dependencies": {
     "@modelcontextprotocol/sdk": "^1.12.0",
