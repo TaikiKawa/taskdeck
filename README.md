@@ -7,14 +7,39 @@
 - **AI側**: MCPサーバー（stdio）でタスクの追加・一覧・完了・削除
 - グループ管理は `project` フィールド（レポジトリ名などを入れる）で行う
 
-> 社内向けの手順書（Mac / Windows / MCP 登録 / トラブルシュート）は [docs/SETUP.md](docs/SETUP.md)。
+> セットアップ手順書（Mac / Windows / MCP 登録 / トラブルシュート）は [docs/SETUP.md](docs/SETUP.md)。
 > 紹介動画と台本は [docs/promo/](docs/promo/)。
 
-## セットアップ
+## ビルド済みアプリを使う（Node.js 不要）
+
+[Releases](https://github.com/TaikiKawa/taskdeck/releases) に Node.js 同梱の自己完結版がある。
+
+| ファイル | 対象 |
+|---|---|
+| `taskdeck-<ver>-mac-universal.zip` | macOS 13 以降（Apple Silicon / Intel 両対応） |
+| `taskdeck-<ver>-win-x64.zip` | Windows 10 / 11（64bit） |
+
+**macOS**: zip を展開して `taskdeck.app` を「アプリケーション」フォルダへ入れて開く。
+メニューの **Claude → Claude Code に MCP を登録…** で MCP 登録まで完了する
+（`claude` CLI が無い環境では登録コマンドがクリップボードにコピーされる）。
+Developer ID で署名・公証済みでないビルドは Gatekeeper に止められるので、その場合は
+右クリック → 「開く」、または `xattr -d com.apple.quarantine taskdeck.app` で解除する。
+
+**Windows**: zip を展開したフォルダ（例: `C:\Users\<あなた>\TaskDeck`）で PowerShell を開き、
+
+```powershell
+powershell -ExecutionPolicy Bypass -File windows\install.ps1
+```
+
+を実行すると、デスクトップとスタートメニューに「TaskDeck」ショートカットができ、
+`claude` CLI があれば MCP も登録される。同梱の `はじめに.txt` にも同じ手順がある。
+未署名の PowerShell スクリプトなので SmartScreen が出たら「詳細情報 → 実行」で進める。
+
+## ソースからセットアップ
 
 ```bash
 npm install
-./macos/build.sh   # taskdeck.app をリポジトリ直下にビルド
+./macos/build.sh   # taskdeck.app をリポジトリ直下にビルド（リポジトリの src/ を参照する開発版）
 ```
 
 ## Mac アプリとして使う（推奨）
@@ -145,6 +170,27 @@ taskdeck MCP を登録済みなら、Claude 自身が着手時に doing / 完了
 
 - 仕組み: サーバーが `claude -p --output-format stream-json` を headless 起動（同一タスクの多重実行は不可、デフォルト30分でタイムアウト）
 - claude CLI の場所は既知のパス→ログインシェル（Windows は `where claude`）の順で自動検出（明示するなら `TASKDECK_CLAUDE`）
+
+## 配布パッケージを作る（メンテナ向け）
+
+```bash
+node scripts/package.mjs --platform darwin --arch universal   # dist/taskdeck-<ver>-mac-universal.zip
+node scripts/package.mjs --platform win32  --arch x64         # dist/taskdeck-<ver>-win-x64.zip（macOS 上でも作れる）
+```
+
+- 同梱する Node.js（既定は実行中の `node` と同じ版）と better-sqlite3 のビルド済みバイナリを
+  nodejs.org / GitHub からダウンロードして `dist/` に組み立てる。macOS 版は Node 本体とアドオンを
+  `lipo` で universal にする
+- macOS の署名・公証は環境変数で有効化:
+  `SIGN_IDENTITY="Developer ID Application: <Team> (<TEAMID>)"`、
+  `NOTARY_PROFILE=<notarytool のプロファイル名>`（または `APPLE_ID` / `APPLE_TEAM_ID` / `APPLE_APP_PASSWORD`）。
+  未指定なら ad-hoc 署名になり、配布先で Gatekeeper の解除が必要
+- タグ `v*` を push すると [.github/workflows/release.yml](.github/workflows/release.yml) が
+  macOS / Windows 両方をビルドして GitHub Release に添付する（署名用 secrets はワークフロー冒頭のコメント参照）
+
+```bash
+git tag v0.1.0 && git push origin v0.1.0
+```
 
 ## 環境変数
 

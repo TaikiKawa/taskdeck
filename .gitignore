@@ -3,3 +3,7 @@ node_modules/
 .DS_Store
 taskdeck.app/
 macos/Config.swift
+docs/promo/*.mp4
+docs/promo/work/
+__pycache__/
+dist/

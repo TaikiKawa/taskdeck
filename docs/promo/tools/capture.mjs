@@ -5,7 +5,7 @@ import { mkdirSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 
 const CHROME = "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome";
-const SCRATCH = "/private/tmp/claude-501/-Users-taiki-dev-taskdeck/0ae9834a-adce-4490-87e1-28ee9c7e8a19/scratchpad";
+const SCRATCH = process.env.PROMO_DIR || new URL("../work", import.meta.url).pathname;
 const BASE = "http://localhost:4848";
 const PORT = 9333;
 const scenario = process.argv[2] || "overview";
@@ -176,13 +176,13 @@ const S = {
   // Scene 2: cards appear while nobody touches the browser, then open one card
   async adds() {
     await goto("/");
-    await setSelect("projectFilter", "alche-lp"); await sleep(400);
+    await setSelect("projectFilter", "example-site"); await sleep(400);
     await moveTo(1180, 760, 10);
     await shot("02a_before_adds");
     const newTasks = [
-      { title: "画像の alt 属性が抜けている箇所を修正", project: "alche-lp", priority: "medium", notes: "src/pages/index.html の hero / gallery セクション。スクリーンリーダー対応" },
-      { title: "フォームのバリデーションエラー表示を追加", project: "alche-lp", priority: "high", notes: "src/components/ContactForm.tsx。必須項目とメール形式のチェック、エラー文を入力欄の下に表示" },
-      { title: "未使用の CSS を削除", project: "alche-lp", priority: "low", notes: "src/styles/legacy.css は参照されていない。PurgeCSS のレポートも添付" },
+      { title: "画像の alt 属性が抜けている箇所を修正", project: "example-site", priority: "medium", notes: "src/pages/index.html の hero / gallery セクション。スクリーンリーダー対応" },
+      { title: "フォームのバリデーションエラー表示を追加", project: "example-site", priority: "high", notes: "src/components/ContactForm.tsx。必須項目とメール形式のチェック、エラー文を入力欄の下に表示" },
+      { title: "未使用の CSS を削除", project: "example-site", priority: "low", notes: "src/styles/legacy.css は参照されていない。PurgeCSS のレポートも添付" },
     ];
     const ids = [];
     await screencast("02_claude_adds_tasks", async () => {
@@ -198,15 +198,15 @@ const S = {
     console.log("added ids", ids);
     await click("#panelClose", 300); await sleep(300);
     // #12 for scene 4
-    const r = await api("/api/tasks", "POST", { title: "フッターの著作権年を 2026 に更新", project: "alche-lp", priority: "low" });
+    const r = await api("/api/tasks", "POST", { title: "フッターの著作権年を 2026 に更新", project: "example-site", priority: "low" });
     console.log("added #", r.id);
   },
   // Scene 3+4: hover → 🤖 → dialog → run → 実行中 → Done → log
   async dispatch() {
     await goto("/");
     const id = Number(process.env.DISPATCH_ID || 10);
-    const cwdReal = "/tmp/claude/dev/alche-lp";
-    await setSelect("projectFilter", "alche-lp"); await sleep(400);
+    const cwdReal = "/tmp/claude/dev/example-site";
+    await setSelect("projectFilter", "example-site"); await sleep(400);
     await evalJs(`document.querySelector('${card(id)}').scrollIntoView({block:'center'})`); await sleep(300);
     await moveTo(1150, 720, 10);
     await screencast("03_dispatch", async () => {
@@ -216,7 +216,7 @@ const S = {
       // the 🤖 button is the first icon-btn inside .meta
       await click(card(id) + " .meta .icon-btn", 700);
       await sleep(900);
-      await evalJs(`document.getElementById('dispatchCwd').value = '~/dev/alche-lp'`);
+      await evalJs(`document.getElementById('dispatchCwd').value = '~/dev/example-site'`);
       await shot("03b_dispatch_modal");
       await sleep(1200);
       await hover("#dispatchTarget", 600); await sleep(300);

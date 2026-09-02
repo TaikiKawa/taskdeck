@@ -1,9 +1,9 @@
 #!/usr/bin/env python3
-"""Assemble the TaskDeck promo: stills + screencasts + Keita narration -> taskdeck_promo.mp4 (1920x1200, 30fps)."""
+"""Assemble the TaskDeck promo: stills + screencasts + narration -> taskdeck_promo.mp4 (1920x1200, 30fps)."""
 import json, os, subprocess, sys
 
-P = "/private/tmp/claude-501/-Users-taiki-dev-taskdeck/0ae9834a-adce-4490-87e1-28ee9c7e8a19/scratchpad/promo"
-SH, VO, OUT = f"{P}/shots", f"{P}/vo_keita", f"{P}/out"
+P = os.environ.get("PROMO_DIR", os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "work"))
+SH, VO, OUT = f"{P}/shots", f"{P}/vo", f"{P}/out"
 os.makedirs(OUT, exist_ok=True)
 FONT = "/System/Library/Fonts/ヒラギノ角ゴシック W6.ttc"
 W, H, FPS = 1920, 1200, 30
@@ -229,7 +229,7 @@ def main():
           + cap("覚えておく係は、Claude と TaskDeck に", t_black + 0.2, L, 66, "(h-text_h)/2-120", box=False) + ","
           + cap("taskdeck", t_black + 0.9, L, 54, "(h-text_h)/2+10", box=False, color=ACCENT) + ","
           + cap("セットアップガイド  docs/SETUP.md", t_black + 1.6, L, 40, "(h-text_h)/2+120", box=False) + ","
-          + cap("質問は Slack #taskdeck へ", t_black + 2.0, L, 40, "(h-text_h)/2+190", box=False) + "[v]")
+          + cap("質問は GitHub Issues へ", t_black + 2.0, L, 40, "(h-text_h)/2+190", box=False) + "[v]")
     scenes.append(render_scene(6, L, [img(f"{SH}/06_closing_board.png")], vf, "[v]"))
 
     # ---- concat ----

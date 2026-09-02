@@ -1,4 +1,4 @@
-# TaskDeck セットアップガイド（社内向け）
+# TaskDeck セットアップガイド
 
 自分の PC の中だけで動く、人間と Claude が同じボードを共有するカンバンです。
 このガイドは「TaskDeck を初めて触る人」向けに、インストールから Claude との接続、最初の5分の使い方までを順番に説明します。
@@ -8,6 +8,39 @@
 > - **完全ローカル**です。データはあなたの PC の中（`~/.taskdeck/tasks.db`）にしか保存されません。クラウドには送られません。
 > - **1人1ボード**です。同僚のボードと自動同期されるものではありません（「自分の頭の中の ToDo を Claude と共有する」ためのツールです）。
 > - Mac / Windows どちらでも動きます。
+> - **Node.js や git を入れたくない人へ**: [GitHub Releases](https://github.com/TaikiKawa/taskdeck/releases) に Node.js 同梱のビルド済み版があります。
+>   その場合は 2〜4 章は不要で、下の「0. ビルド済み版を使う」だけで動きます。
+
+---
+
+## 0. ビルド済み版を使う（Node.js 不要）
+
+Releases から自分の OS の zip をダウンロードします。
+
+| ファイル | 対象 |
+|---|---|
+| `taskdeck-<バージョン>-mac-universal.zip` | macOS 13 以降（Apple Silicon / Intel 両対応） |
+| `taskdeck-<バージョン>-win-x64.zip` | Windows 10 / 11（64bit） |
+
+**Mac**
+
+1. zip を展開し、`taskdeck.app` を「アプリケーション」フォルダに移動して開く
+2. 「開発元を確認できない」と出たら、Finder で `taskdeck.app` を右クリック → 「開く」（初回だけ）
+3. メニューバーの **Claude → Claude Code に MCP を登録…** を選ぶ。`claude` コマンドが入っていればその場で登録され、無ければ登録コマンドがクリップボードにコピーされるのでターミナルに貼り付けて実行する
+
+**Windows**
+
+1. zip を展開し、フォルダごと好きな場所に置く（例: `C:\Users\あなた\TaskDeck`）
+2. そのフォルダで PowerShell を開き、次を実行する
+
+```powershell
+powershell -ExecutionPolicy Bypass -File windows\install.ps1
+```
+
+3. デスクトップに「TaskDeck」ショートカットができるのでダブルクリックで起動。`claude` コマンドが入っていれば MCP も同時に登録される
+
+ビルド済み版を使う場合、このあとは [6. CLAUDE.md への追記](#6-claudemd-への追記) と [7. 最初の5分でやってみること](#7-最初の5分でやってみること) に進んでください。
+アプリを別の場所に移動したら MCP の登録パスがずれるので、もう一度登録し直してください。
 
 ---
 
@@ -220,14 +253,14 @@ Claude デスクトップアプリは設定ファイル `claude_desktop_config.j
 
 ファイルが無ければ新規作成してください。
 
-**Mac の例**（`taiki` の部分は自分のユーザー名に）:
+**Mac の例**（`you` の部分は自分のユーザー名に）:
 
 ```json
 {
   "mcpServers": {
     "taskdeck": {
       "command": "node",
-      "args": ["/Users/taiki/dev/taskdeck/src/mcp.js"]
+      "args": ["/Users/you/dev/taskdeck/src/mcp.js"]
     }
   }
 }
@@ -240,7 +273,7 @@ Claude デスクトップアプリは設定ファイル `claude_desktop_config.j
   "mcpServers": {
     "taskdeck": {
       "command": "node",
-      "args": ["C:\\Users\\taiki\\dev\\taskdeck\\src\\mcp.js"]
+      "args": ["C:\\Users\\you\\dev\\taskdeck\\src\\mcp.js"]
     }
   }
 }
@@ -263,7 +296,7 @@ Cowork は Claude デスクトップアプリの一部なので、**(b) で登�
 ```toml
 [mcp_servers.taskdeck]
 command = "node"
-args = ["/Users/taiki/dev/taskdeck/src/mcp.js"]
+args = ["/Users/you/dev/taskdeck/src/mcp.js"]
 ```
 
 ### 登録後に使えるようになる MCP ツール
@@ -395,14 +428,14 @@ $env:TASKDECK_PORT = 4848
 アプリから起動したサーバーは素の PATH しか持たないため、`claude` の場所を自動検出できないことがあります。`TASKDECK_CLAUDE` で場所を教えてください。
 
 ```bash
-which claude                      # 例: /Users/taiki/.nodebrew/current/bin/claude
+which claude                      # 例: /Users/you/.nodebrew/current/bin/claude
 launchctl setenv TASKDECK_CLAUDE "$(which claude)"
 open taskdeck.app
 ```
 
 ```powershell
-where.exe claude                  # 例: C:\Users\taiki\AppData\Roaming\npm\claude.cmd
-[Environment]::SetEnvironmentVariable("TASKDECK_CLAUDE", "C:\Users\taiki\AppData\Roaming\npm\claude.cmd", "User")
+where.exe claude                  # 例: C:\Users\you\AppData\Roaming\npm\claude.cmd
+[Environment]::SetEnvironmentVariable("TASKDECK_CLAUDE", "C:\Users\you\AppData\Roaming\npm\claude.cmd", "User")
 ```
 
 そもそも CLI を入れていない場合は、実行先を「デスクトップアプリで開く」にしてください。
@@ -506,5 +539,5 @@ TaskDeck を終了した状態で、コピーしておいた `tasks.db` を元�
 
 ---
 
-困ったら、このガイドの該当箇所と一緒に Slack で聞いてください。
+困ったら、このガイドの該当箇所を添えて GitHub の Issue で聞いてください。
 アップデートは `cd ~/dev/taskdeck && git pull && npm install`（Mac はさらに `./macos/build.sh`）です。

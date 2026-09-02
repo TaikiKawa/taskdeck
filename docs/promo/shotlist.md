@@ -22,7 +22,7 @@ open -na "Google Chrome" --args --app=http://localhost:4747 --window-size=1280,8
 ```
 
 - macOS のネイティブアプリ（`open taskdeck.app`）でもよいが、ウインドウサイズが揃えにくいので Chrome アプリモード推奨
-- テーマ: OS のライト / ダークどちらでも可（`prefers-color-scheme` に追従する）。**全ショットで統一すること**。社内向けならダークが Claude Code のターミナルと並べたとき馴染みやすい
+- テーマ: OS のライト / ダークどちらでも可（`prefers-color-scheme` に追従する）。**全ショットで統一すること**。ダークが Claude Code のターミナルと並べたとき馴染みやすい
 - 収録ツール: macOS は QuickTime（画面収録）or CleanShot X、Windows は Xbox Game Bar（Win+G）or OBS。カーソルは表示 ON
 - 収録前に `⌘R` でリロードして、トーストや選択状態を消す
 
@@ -36,39 +36,39 @@ TASKDECK_DIR=~/.taskdeck-demo npm run ui
 
 # Claude Code 側の MCP 登録（撮影用にデモ DB を向ける。撮影後は元に戻す）
 claude mcp remove taskdeck
-claude mcp add --scope user -e TASKDECK_DIR=$HOME/.taskdeck-demo taskdeck -- node /Users/taiki/dev/taskdeck/src/mcp.js
+claude mcp add --scope user -e TASKDECK_DIR=$HOME/.taskdeck-demo taskdeck -- node /Users/you/dev/taskdeck/src/mcp.js
 ```
 
 撮影後は `rm -rf ~/.taskdeck-demo` と、`claude mcp add` を本番の値で登録し直す（または `npm run mcp:register`）。
 
-### デモデータ（社内向けの親しみやすい架空タスク）
+### デモデータ（親しみやすい架空タスク）
 
-グループは 3 つ: `alche-lp`（会社サイト）、`slack-bot`（社内 Bot）、`inbox`（デフォルト）。
+グループは 3 つ: `example-site`（Web サイト）、`slack-bot`（チームの Bot）、`inbox`（デフォルト）。
 
 | # | タイトル | グループ | 優先度 | 列 | メモ（任意） |
 |---|---|---|---|---|---|
-| 1 | LP のヒーロー画像を差し替え | alche-lp | 高 | Todo | 新しいキービジュアルは Figma の「LP 2026-09」フレーム |
-| 2 | お問い合わせフォームの送信後に完了メッセージを出す | alche-lp | 中 | Todo | 今は送信しても何も出ないので不安になる |
+| 1 | LP のヒーロー画像を差し替え | example-site | 高 | Todo | 新しいキービジュアルは Figma の「LP 2026-09」フレーム |
+| 2 | お問い合わせフォームの送信後に完了メッセージを出す | example-site | 中 | Todo | 今は送信しても何も出ないので不安になる |
 | 3 | Slack Bot のエラーハンドリング追加 | slack-bot | 高 | Todo | 429 のときにリトライせず落ちる |
 | 4 | 依存パッケージの脆弱性チェック | slack-bot | 中 | Todo | `npm audit` の high 以上を潰す |
 | 5 | 週報テンプレートを Notion に移す | inbox | 低 | Todo | |
-| 6 | OGP 画像が古いので差し替え | alche-lp | 低 | Doing | |
+| 6 | OGP 画像が古いので差し替え | example-site | 低 | Doing | |
 | 7 | README のセットアップ手順を Windows 対応にする | inbox | 中 | Done | |
 | 8 | Bot の起動時ログにバージョンを出す | slack-bot | なし | Done | |
 
 - タスク番号は投入順に `#1` から振られる。**上の順番どおりに入れる**と台本の番号と合う
-- シーン 2 で Claude が追加するタスクは `#9〜#11`、シーン 3〜4 で 🤖 に渡すのは `#10`、シーン 4 の「#12 やって」用に、撮影直前にもう 1 枚 `#12 フッターの著作権年を 2026 に更新`（alche-lp, 低）を手で追加しておく
+- シーン 2 で Claude が追加するタスクは `#9〜#11`、シーン 3〜4 で 🤖 に渡すのは `#10`、シーン 4 の「#12 やって」用に、撮影直前にもう 1 枚 `#12 フッターの著作権年を 2026 に更新`（example-site, 低）を手で追加しておく
 
 一括投入スクリプト（UI サーバー起動後に実行。`curl` で `POST /api/tasks`）:
 
 ```bash
 add() { curl -s -X POST localhost:4747/api/tasks -H 'content-type: application/json' -d "$1" >/dev/null; }
-add '{"title":"LP のヒーロー画像を差し替え","project":"alche-lp","priority":"high","notes":"新しいキービジュアルは Figma の「LP 2026-09」フレーム"}'
-add '{"title":"お問い合わせフォームの送信後に完了メッセージを出す","project":"alche-lp","priority":"medium","notes":"今は送信しても何も出ないので不安になる"}'
+add '{"title":"LP のヒーロー画像を差し替え","project":"example-site","priority":"high","notes":"新しいキービジュアルは Figma の「LP 2026-09」フレーム"}'
+add '{"title":"お問い合わせフォームの送信後に完了メッセージを出す","project":"example-site","priority":"medium","notes":"今は送信しても何も出ないので不安になる"}'
 add '{"title":"Slack Bot のエラーハンドリング追加","project":"slack-bot","priority":"high","notes":"429 のときにリトライせず落ちる"}'
 add '{"title":"依存パッケージの脆弱性チェック","project":"slack-bot","priority":"medium","notes":"npm audit の high 以上を潰す"}'
 add '{"title":"週報テンプレートを Notion に移す","project":"inbox","priority":"low"}'
-add '{"title":"OGP 画像が古いので差し替え","project":"alche-lp","priority":"low","status":"doing"}'
+add '{"title":"OGP 画像が古いので差し替え","project":"example-site","priority":"low","status":"doing"}'
 add '{"title":"README のセットアップ手順を Windows 対応にする","project":"inbox","priority":"medium","status":"done"}'
 add '{"title":"Bot の起動時ログにバージョンを出す","project":"slack-bot","status":"done"}'
 ```
@@ -112,12 +112,12 @@ add '{"title":"Bot の起動時ログにバージョンを出す","project":"sla
 
 - **用途**: シーン 2。Claude が `task_add` → ボードに勝手にカードが増える
 - **準備**:
-  - 左: アプリモードのボード（640x800 か、1280x800 のまま右にターミナルを重ねる）。プロジェクトセレクタで `alche-lp` に絞り込み
-  - 右: ターミナルで `cd ~/dev/alche-lp`（会社サイトのリポジトリ。無ければ小さなダミーリポジトリを作る。**わざと** alt 属性の無い `<img>`、未使用 CSS、バリデーション無しのフォームを仕込んでおくと Claude が見つけやすい）→ `claude` 起動
-  - リポジトリの `CLAUDE.md` に README の「エージェントに使わせる」節を貼っておく（project 名に `alche-lp` を使うよう明記）
+  - 左: アプリモードのボード（640x800 か、1280x800 のまま右にターミナルを重ねる）。プロジェクトセレクタで `example-site` に絞り込み
+  - 右: ターミナルで `cd ~/dev/example-site`（デモ用 Web サイトのリポジトリ。無ければ小さなダミーリポジトリを作る。**わざと** alt 属性の無い `<img>`、未使用 CSS、バリデーション無しのフォームを仕込んでおくと Claude が見つけやすい）→ `claude` 起動
+  - リポジトリの `CLAUDE.md` に README の「エージェントに使わせる」節を貼っておく（project 名に `example-site` を使うよう明記）
 - **撮影**:
   1. 録画開始。ターミナルで 1〜2 往復、普通の会話をしておく（例: 「フォームの送信処理の diff 見せて」）
-  2. 入力: `ついでに、このリポジトリ見て、直したほうがいいところを 3 つくらい TaskDeck に積んでおいて。project は alche-lp で`
+  2. 入力: `ついでに、このリポジトリ見て、直したほうがいいところを 3 つくらい TaskDeck に積んでおいて。project は example-site で`
   3. Claude が `taskdeck - task_add` を呼ぶ → **左のボードにカードが増える**（この間マウスはターミナル側に置いたまま。ボードは触らない）
   4. 2 秒待ってから、増えたカードを 1 枚クリック → 詳細パネルの「メモ」を 3 秒見せる → `✕` で閉じる
 - **注意**: Claude の出力内容は毎回変わる。タイトルが長すぎ / 数が多すぎたら撮り直す。「3 つくらい」と数を指定しておくと安定する
@@ -125,7 +125,7 @@ add '{"title":"Bot の起動時ログにバージョンを出す","project":"sla
 
   ```bash
   curl -s -X POST localhost:4747/api/tasks -H 'content-type: application/json' \
-    -d '{"title":"画像の alt 属性が抜けている箇所を修正","project":"alche-lp","priority":"medium","notes":"src/pages/index.html の hero / gallery セクション。スクリーンリーダー対応"}'
+    -d '{"title":"画像の alt 属性が抜けている箇所を修正","project":"example-site","priority":"medium","notes":"src/pages/index.html の hero / gallery セクション。スクリーンリーダー対応"}'
   ```
 
   ただし `curl` 経由だと「登録元セッション」と「作業ディレクトリ」が紐付かないので、シーン 3 の自動入力は別途仕込む（上記「作業ディレクトリの自動入力を成立させる」）。
@@ -133,7 +133,7 @@ add '{"title":"Bot の起動時ログにバージョンを出す","project":"sla
 ### 03_dispatch_modal.mp4（動画）＋ 03b_dispatch_modal.png（静止画）
 
 - **用途**: シーン 3。🤖 → ダイアログ → 実行 → `🤖 実行中`
-- **準備**: ボード全画面（1280x800）。`#10` のカードが `Todo` にあり、`~/.taskdeck-demo/projects.json` に `alche-lp` のパスが登録済み。ターミナルで `claude /login` 済み（バックグラウンド実行に必要）。`claude` CLI が PATH に無いときは `TASKDECK_CLAUDE=/path/to/claude` を UI サーバーに渡す
+- **準備**: ボード全画面（1280x800）。`#10` のカードが `Todo` にあり、`~/.taskdeck-demo/projects.json` に `example-site` のパスが登録済み。ターミナルで `claude /login` 済み（バックグラウンド実行に必要）。`claude` CLI が PATH に無いときは `TASKDECK_CLAUDE=/path/to/claude` を UI サーバーに渡す
 - **撮影**:
   1. `#10 お問い合わせフォーム…` ではなく、02 で増えた `#10`（例: フォームのバリデーション…）にホバー → 右下 `🤖` をゆっくりクリック
   2. ダイアログ「🤖 Claude Codeに依頼」が開いたら **2 秒静止**（ここで 03b のスクショも撮る）。確認ポイント: `実行先` = 「デスクトップアプリで開く — Claude Code」、`実行モード` = 「登録元セッションの続きで実行（文脈を引き継ぐ）」、`作業ディレクトリ` にパスが入っている、`権限モード` = 「安全 — ファイル編集のみ自動許可 (acceptEdits)」
@@ -182,7 +182,7 @@ add '{"title":"Bot の起動時ログにバージョンを出す","project":"sla
 - ウインドウ: ボードと並べるときは 640x800、単独なら 1280x800
 - Claude Code の表示: `claude` 起動直後の見出しは映ってよい。MCP ツール呼び出し行（`taskdeck - task_add (MCP)` のような行）が読める大きさに
 - 台本に出てくる入力文（そのまま打つ）:
-  - 02: `ついでに、このリポジトリ見て、直したほうがいいところを 3 つくらい TaskDeck に積んでおいて。project は alche-lp で`
+  - 02: `ついでに、このリポジトリ見て、直したほうがいいところを 3 つくらい TaskDeck に積んでおいて。project は example-site で`
   - 04: `#12 のタスクやって`
 - 撮影前に `claude` で一度 `task_list` を呼ばせて、MCP が接続できていることを確認（`/mcp` で taskdeck が connected か見る）
 - 秘密情報の写り込みに注意: ホームディレクトリ名、`.env`、Slack トークン等。ダミーリポジトリで撮るのが安全
