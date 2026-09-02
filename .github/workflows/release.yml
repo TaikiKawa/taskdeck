@@ -1,7 +1,9 @@
 # タグ v* を push すると macOS (universal) と Windows (x64) の配布 zip をビルドし、
 # GitHub Release に添付する。ソースコードの zip / tar.gz は GitHub が自動で付ける。
 #
-# macOS の署名・公証を有効にするには Repository secrets に以下を登録する (無ければ ad-hoc 署名):
+# macOS 版は Repository secrets に以下が登録されているときだけビルドする (無ければ macOS ジョブはスキップし、
+# 手元で `SIGN_IDENTITY=... NOTARY_PROFILE=... node scripts/package.mjs --platform darwin` で作った zip を
+# `gh release upload` で添付する):
 #   MACOS_CERTIFICATE_P12       Developer ID Application 証明書 (.p12) を base64 にしたもの
 #   MACOS_CERTIFICATE_PASSWORD  .p12 のパスワード
 #   MACOS_SIGN_IDENTITY         例: "Developer ID Application: Alche, inc. (GS68A638AG)"
