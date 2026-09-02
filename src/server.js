@@ -55,9 +55,64 @@ async function readBody(req) {
   return raw ? JSON.parse(raw) : {};
 }
 
+// ---- ブラウザ経由の攻撃 (CSRF / DNS rebinding) 対策 ----
+// このサーバーは 127.0.0.1 にしか bind しないが、利用者のブラウザで開いた
+// 任意のサイトの JavaScript は localhost に向けてリクエストを送れる。
+// 書き込み API を叩かれると、攻撃者の書いたタスクを `claude` に実行させられるため、
+//   1. Host が自分自身 (localhost / 127.0.0.1 / [::1] + ポート) でなければ拒否
+//   2. Origin が付いていれば同じく自分自身でなければ拒否 (ブラウザは他サイトからの
+//      POST に必ず Origin を付ける。Origin: null も拒否)
+//   3. Sec-Fetch-Site が cross-site なら拒否
+//   4. 本文を伴う書き込みは Content-Type: application/json を必須にする
+//      (CORS プリフライト無しで送れる「単純リクエスト」を弾く)
+// macOS アプリは 127.0.0.1、Windows のアプリモードは localhost で接続するので両方許可する。
+const LOCAL_HOSTS = new Set([`localhost:${PORT}`, `127.0.0.1:${PORT}`, `[::1]:${PORT}`]);
+
+function isLocalHost(host) {
+  return typeof host === "string" && LOCAL_HOSTS.has(host.toLowerCase());
+}
+
+function isLocalOrigin(origin) {
+  try {
+    const u = new URL(origin);
+    return u.protocol === "http:" && isLocalHost(u.host);
+  } catch {
+    return false;
+  }
+}
+
+// 通せないリクエストなら {status, error} を返す。通せるなら null。
+function rejectCrossSite(req) {
+  const method = req.method || "GET";
+  if (!isLocalHost(req.headers.host)) {
+    return { status: 403, error: "Host ヘッダが localhost ではありません" };
+  }
+  if (method === "GET" || method === "HEAD" || method === "OPTIONS") return null;
+  const origin = req.headers.origin;
+  if (origin !== undefined && !isLocalOrigin(origin)) {
+    return { status: 403, error: "別のサイトからの書き込みは受け付けません" };
+  }
+  const site = req.headers["sec-fetch-site"];
+  if (site && site !== "same-origin" && site !== "none") {
+    return { status: 403, error: "別のサイトからの書き込みは受け付けません" };
+  }
+  if (method === "POST" || method === "PATCH" || method === "PUT") {
+    const type = String(req.headers["content-type"] || "").split(";")[0].trim().toLowerCase();
+    if (type !== "application/json") {
+      return { status: 415, error: "Content-Type は application/json にしてください" };
+    }
+  }
+  return null;
+}
+
 const server = createServer(async (req, res) => {
   const url = new URL(req.url, `http://localhost:${PORT}`);
   const { pathname } = url;
+  const rejected = rejectCrossSite(req);
+  if (rejected) {
+    sendJson(res, rejected.status, { error: rejected.error });
+    return;
+  }
   try {
     if (req.method === "GET" && (pathname === "/" || pathname === "/index.html")) {
       res.writeHead(200, { "Content-Type": "text/html; charset=utf-8" });

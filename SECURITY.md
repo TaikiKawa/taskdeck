@@ -26,4 +26,7 @@ taskdeck は **利用者の PC の中だけで動く**ツールで、サーバ�
 - 一方で、ローカルで動く Web サーバーと、タスクを元に `claude` CLI を起動する機能があるため、
   **同じ PC 上のブラウザで開いた悪意あるページからの操作**（CSRF / DNS rebinding）や、
   **タスク本文経由のプロンプトインジェクション**は正当な報告対象です
+- CSRF / DNS rebinding については、サーバーが Host・Origin・Sec-Fetch-Site・Content-Type を検査して
+  自分自身（`localhost` / `127.0.0.1`）以外からの書き込みを拒否します（`src/server.js` の `rejectCrossSite`、
+  テストは `test/server.test.mjs`）。この検査を迂回できる場合は報告してください
 - 「全自動（`--dangerously-skip-permissions`）」モードは信頼できるタスクにだけ使う前提です
