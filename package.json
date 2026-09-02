@@ -1,6 +1,6 @@
 {
   "name": "taskdeck",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "Minimal local kanban shared by humans and AI coding agents (MCP + web UI, SQLite)",
   "type": "module",
   "private": true,
