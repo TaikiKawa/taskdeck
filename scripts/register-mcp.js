@@ -8,6 +8,7 @@
 // claude CLI が見つからない場合は、手で貼り付けられるコマンドと
 // Claude Desktop (claude_desktop_config.json) / Codex (config.toml) の設定例を表示する。
 import { spawn, spawnSync } from "node:child_process";
+import { existsSync } from "node:fs";
 import { homedir } from "node:os";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -18,8 +19,13 @@ const printOnly = argv.includes("--print");
 const scopeIdx = argv.indexOf("--scope");
 const scope = scopeIdx >= 0 && argv[scopeIdx + 1] ? argv[scopeIdx + 1] : "user";
 
-const mcpPath = resolve(dirname(fileURLToPath(import.meta.url)), "..", "src", "mcp.js");
-const claudeArgs = ["mcp", "add", "--scope", scope, "taskdeck", "--", "node", mcpPath];
+const root = resolve(dirname(fileURLToPath(import.meta.url)), "..");
+const mcpPath = join(root, "src", "mcp.js");
+// 配布版 (scripts/package.mjs) は Node.js を <root>/node に同梱している。
+// その場合は PATH の node ではなく同梱の node を登録する (利用者に Node.js 不要)。
+const bundledNode = IS_WIN ? join(root, "node", "node.exe") : join(root, "node", "bin", "node");
+const nodeCmd = existsSync(bundledNode) ? bundledNode : "node";
+const claudeArgs = ["mcp", "add", "--scope", scope, "taskdeck", "--", nodeCmd, mcpPath];
 
 // シェルに貼り付ける用の表示 (空白を含むパスは引用符で囲む)
 function shellQuote(s) {
@@ -47,7 +53,7 @@ function claudeAvailable() {
 
 function configSnippets() {
   const desktopJson = JSON.stringify(
-    { mcpServers: { taskdeck: { command: "node", args: [mcpPath] } } },
+    { mcpServers: { taskdeck: { command: nodeCmd, args: [mcpPath] } } },
     null,
     2
   );
@@ -57,7 +63,7 @@ function configSnippets() {
       ? join(homedir(), "Library", "Application Support", "Claude", "claude_desktop_config.json")
       : join(homedir(), ".config", "Claude", "claude_desktop_config.json");
   // TOML の基本文字列は JSON と同じくバックスラッシュをエスケープする
-  const codexToml = `[mcp_servers.taskdeck]\ncommand = "node"\nargs = [${JSON.stringify(mcpPath)}]`;
+  const codexToml = `[mcp_servers.taskdeck]\ncommand = ${JSON.stringify(nodeCmd)}\nargs = [${JSON.stringify(mcpPath)}]`;
   const codexPath = join(homedir(), ".codex", "config.toml");
   return { desktopJson, desktopPath, codexToml, codexPath };
 }
@@ -67,9 +73,11 @@ function printManual() {
   console.log(`\n# Claude Code CLI (貼り付けて実行):\n${commandLine}\n`);
   console.log(`# Claude Desktop (${desktopPath}):\n${desktopJson}\n`);
   console.log(`# Codex CLI (${codexPath}):\n${codexToml}\n`);
-  console.log(
-    `# メモ: "node" が PATH に無いクライアント (デスクトップアプリ等) では command を絶対パスにする:\n#   ${process.execPath}\n`
-  );
+  if (nodeCmd === "node") {
+    console.log(
+      `# メモ: "node" が PATH に無いクライアント (デスクトップアプリ等) では command を絶対パスにする:\n#   ${process.execPath}\n`
+    );
+  }
 }
 
 console.log(`MCP server: ${mcpPath}`);

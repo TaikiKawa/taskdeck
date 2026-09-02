@@ -13,7 +13,9 @@ macOS 版 `taskdeck.app` に近い体験にするためのファイル一式。
 ## 前提
 
 - Windows 10 / 11
-- [Node.js](https://nodejs.org/) 20 以上 (LTS 推奨)。nvm-windows / volta / fnm 経由でも可
+- [Node.js](https://nodejs.org/) 20 以上 (LTS 推奨)。nvm-windows / volta / fnm 経由でも可。
+  **GitHub Releases の `taskdeck-<ver>-win-x64.zip` は `node\node.exe` と `node_modules` を同梱しているので不要**
+  (`install.ps1` が同梱版を検出して Node の確認と `npm install` を省略する)
 - Claude Code CLI (`npm i -g @anthropic-ai/claude-code` または公式インストーラ) — 🤖 ボタンを使う場合
 
 ## セットアップ

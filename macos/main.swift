@@ -27,6 +27,21 @@ class AppDelegate: NSObject, NSApplicationDelegate, WKUIDelegate {
     let port = ProcessInfo.processInfo.environment["TASKDECK_PORT"] ?? "4747"
     var baseURL: URL { URL(string: "http://127.0.0.1:\(port)/")! }
 
+    // 配布版は Contents/Resources/app にソースと node_modules を同梱している。
+    // 開発版 (macos/build.sh) は build 時に焼き込んだリポジトリパスを使う。
+    var appRoot: String {
+        if let bundled = Bundle.main.resourceURL?.appendingPathComponent("app").path,
+           FileManager.default.fileExists(atPath: bundled + "/src/server.js") {
+            return bundled
+        }
+        return repoPath
+    }
+    // 配布版に同梱した Node.js (scripts/package.mjs が app/node/bin/node に置く)
+    var bundledNode: String? {
+        let p = appRoot + "/node/bin/node"
+        return FileManager.default.isExecutableFile(atPath: p) ? p : nil
+    }
+
     func applicationDidFinishLaunching(_ notification: Notification) {
         NSApp.applicationIconImage = makeIcon()
         buildMenu()
@@ -92,7 +107,7 @@ class AppDelegate: NSObject, NSApplicationDelegate, WKUIDelegate {
                         self.waitForServer(retries: retries - 1)
                     }
                 } else {
-                    self.showError("サーバーを起動できませんでした。\nnode と \(repoPath)/src/server.js を確認してください。")
+                    self.showError("サーバーを起動できませんでした。\nnode と \(self.appRoot)/src/server.js を確認してください。")
                 }
             }
         }
@@ -105,8 +120,8 @@ class AppDelegate: NSObject, NSApplicationDelegate, WKUIDelegate {
         }
         let proc = Process()
         proc.executableURL = URL(fileURLWithPath: node)
-        proc.arguments = [repoPath + "/src/server.js"]
-        proc.currentDirectoryURL = URL(fileURLWithPath: repoPath)
+        proc.arguments = [appRoot + "/src/server.js"]
+        proc.currentDirectoryURL = URL(fileURLWithPath: appRoot)
         var env = ProcessInfo.processInfo.environment
         env["TASKDECK_PORT"] = port
         proc.environment = env
@@ -121,6 +136,7 @@ class AppDelegate: NSObject, NSApplicationDelegate, WKUIDelegate {
     func findNode() -> String? {
         if let env = ProcessInfo.processInfo.environment["TASKDECK_NODE"],
            FileManager.default.isExecutableFile(atPath: env) { return env }
+        if let bundled = bundledNode { return bundled }
         let home = NSHomeDirectory()
         let candidates = [
             home + "/.nodebrew/current/bin/node",
@@ -181,6 +197,13 @@ class AppDelegate: NSObject, NSApplicationDelegate, WKUIDelegate {
         viewItem.submenu = viewMenu
         viewMenu.addItem(withTitle: "再読み込み", action: #selector(reload), keyEquivalent: "r")
 
+        let claudeItem = NSMenuItem()
+        main.addItem(claudeItem)
+        let claudeMenu = NSMenu(title: "Claude")
+        claudeItem.submenu = claudeMenu
+        claudeMenu.addItem(withTitle: "Claude Code に MCP を登録…", action: #selector(registerMcp), keyEquivalent: "")
+        claudeMenu.addItem(withTitle: "MCP 登録コマンドをコピー", action: #selector(copyMcpCommand), keyEquivalent: "")
+
         let windowItem = NSMenuItem()
         main.addItem(windowItem)
         let windowMenu = NSMenu(title: "ウインドウ")
@@ -193,6 +216,61 @@ class AppDelegate: NSObject, NSApplicationDelegate, WKUIDelegate {
 
     @objc func reload() {
         webView.load(URLRequest(url: baseURL))
+    }
+
+    // MARK: - MCP registration (配布版はターミナルで npm run mcp:register できないのでメニューから)
+
+    func shellQuote(_ s: String) -> String {
+        "'" + s.replacingOccurrences(of: "'", with: "'\\''") + "'"
+    }
+
+    var mcpCommand: String {
+        let node = bundledNode ?? findNode() ?? "node"
+        let mcp = appRoot + "/src/mcp.js"
+        return "claude mcp add --scope user taskdeck -- \(shellQuote(node)) \(shellQuote(mcp))"
+    }
+
+    func copyToPasteboard(_ s: String) {
+        let pb = NSPasteboard.general
+        pb.clearContents()
+        pb.setString(s, forType: .string)
+    }
+
+    @objc func copyMcpCommand() {
+        copyToPasteboard(mcpCommand)
+        let alert = NSAlert()
+        alert.messageText = "MCP 登録コマンドをコピーしました"
+        alert.informativeText = "ターミナルに貼り付けて実行してください:\n\n\(mcpCommand)"
+        alert.runModal()
+    }
+
+    @objc func registerMcp() {
+        // ログインシェル経由で claude CLI を探す (.app は素の PATH しか持たない)
+        let sh = Process()
+        sh.executableURL = URL(fileURLWithPath: "/bin/zsh")
+        sh.arguments = ["-lc", mcpCommand]
+        let pipe = Pipe()
+        sh.standardOutput = pipe
+        sh.standardError = pipe
+        do { try sh.run() } catch {
+            copyToPasteboard(mcpCommand)
+            showError("シェルを起動できませんでした。コマンドをクリップボードにコピーしたので、ターミナルで実行してください:\n\n\(mcpCommand)")
+            return
+        }
+        sh.waitUntilExit()
+        let out = String(data: pipe.fileHandleForReading.readDataToEndOfFile(), encoding: .utf8)?
+            .trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+        let alert = NSAlert()
+        alert.messageText = "taskdeck"
+        if sh.terminationStatus == 0 {
+            alert.informativeText = "Claude Code に MCP を登録しました。\n\n\(out)\n\n確認: claude mcp list"
+        } else {
+            copyToPasteboard(mcpCommand)
+            alert.informativeText =
+                "登録に失敗しました (claude CLI が見つからない可能性があります)。\n\n\(out)\n\n" +
+                "コマンドをクリップボードにコピーしたので、ターミナルで実行してください:\n\(mcpCommand)"
+        }
+        alert.runModal()
     }
 
     // MARK: - Dock icon (drawn at runtime, no asset pipeline)

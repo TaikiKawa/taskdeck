@@ -3,7 +3,7 @@
   taskdeck を Windows で「アプリっぽく」起動する (macOS の taskdeck.app 相当)。
 
 .DESCRIPTION
-  1. node.exe を探す (TASKDECK_NODE > PATH > Program Files > nvm-windows > volta > fnm)
+  1. node.exe を探す (TASKDECK_NODE > 同梱 node\node.exe > PATH > Program Files > nvm-windows > volta > fnm)
   2. ポート (TASKDECK_PORT, 既定 4747) にサーバーが居なければ src/server.js を
      バックグラウンドで起動し、PID を ~/.taskdeck/server.pid に記録する
   3. Edge / Chrome の --app モードでボードをウインドウ表示する
@@ -70,6 +70,9 @@ function Find-Node {
     if (Test-Path -LiteralPath $env:TASKDECK_NODE -PathType Leaf) { return $env:TASKDECK_NODE }
     Write-Info "TASKDECK_NODE=$($env:TASKDECK_NODE) が存在しないため自動検出します"
   }
+  # 配布版 (scripts/package.mjs) は node.exe を <root>\node に同梱している
+  $bundled = Join-Path $RepoRoot 'node\node.exe'
+  if (Test-Path -LiteralPath $bundled -PathType Leaf) { return $bundled }
   $cmd = Get-Command node.exe -ErrorAction SilentlyContinue
   if ($cmd) { return $cmd.Source }
 

@@ -1,0 +1,104 @@
+# タグ v* を push すると macOS (universal) と Windows (x64) の配布 zip をビルドし、
+# GitHub Release に添付する。ソースコードの zip / tar.gz は GitHub が自動で付ける。
+#
+# macOS の署名・公証を有効にするには Repository secrets に以下を登録する (無ければ ad-hoc 署名):
+#   MACOS_CERTIFICATE_P12       Developer ID Application 証明書 (.p12) を base64 にしたもの
+#   MACOS_CERTIFICATE_PASSWORD  .p12 のパスワード
+#   MACOS_SIGN_IDENTITY         例: "Developer ID Application: Alche, inc. (GS68A638AG)"
+#   APPLE_ID                    Apple ID (メールアドレス)
+#   APPLE_TEAM_ID               例: GS68A638AG
+#   APPLE_APP_PASSWORD          appleid.apple.com で発行した App 用パスワード
+#
+# 外部入力 (issue / PR 本文など) は一切使わない。secrets は env 経由でのみ参照する。
+name: release
+
+on:
+  push:
+    tags: ["v*"]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+env:
+  NODE_VERSION: "22"
+
+jobs:
+  mac:
+    runs-on: macos-14
+    env:
+      HAS_CERT: ${{ secrets.MACOS_CERTIFICATE_P12 != '' }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: npm
+      - run: npm ci
+
+      - name: Import Developer ID certificate
+        if: env.HAS_CERT == 'true'
+        env:
+          MACOS_CERTIFICATE_P12: ${{ secrets.MACOS_CERTIFICATE_P12 }}
+          MACOS_CERTIFICATE_PASSWORD: ${{ secrets.MACOS_CERTIFICATE_PASSWORD }}
+        run: |
+          set -euo pipefail
+          KEYCHAIN="$RUNNER_TEMP/build.keychain-db"
+          KC_PASS="$(openssl rand -hex 16)"
+          echo "$MACOS_CERTIFICATE_P12" | base64 --decode > "$RUNNER_TEMP/cert.p12"
+          security create-keychain -p "$KC_PASS" "$KEYCHAIN"
+          security set-keychain-settings -lut 21600 "$KEYCHAIN"
+          security unlock-keychain -p "$KC_PASS" "$KEYCHAIN"
+          security import "$RUNNER_TEMP/cert.p12" -P "$MACOS_CERTIFICATE_PASSWORD" -A -t cert -f pkcs12 -k "$KEYCHAIN"
+          security set-key-partition-list -S apple-tool:,apple: -s -k "$KC_PASS" "$KEYCHAIN"
+          security list-keychains -d user -s "$KEYCHAIN" login.keychain
+          rm -f "$RUNNER_TEMP/cert.p12"
+          security find-identity -v -p codesigning "$KEYCHAIN"
+
+      - name: Package (sign + notarize when secrets are present)
+        env:
+          SIGN_IDENTITY: ${{ env.HAS_CERT == 'true' && secrets.MACOS_SIGN_IDENTITY || '' }}
+          APPLE_ID: ${{ secrets.APPLE_ID }}
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+          APPLE_APP_PASSWORD: ${{ secrets.APPLE_APP_PASSWORD }}
+        run: node scripts/package.mjs --platform darwin --arch universal
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: mac
+          path: dist/*.zip
+          if-no-files-found: error
+
+  windows:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: npm
+      - run: npm ci
+      - run: node scripts/package.mjs --platform win32 --arch x64
+      - uses: actions/upload-artifact@v4
+        with:
+          name: windows
+          path: dist/*.zip
+          if-no-files-found: error
+
+  release:
+    needs: [mac, windows]
+    if: startsWith(github.ref, 'refs/tags/v')
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          path: dist
+          merge-multiple: true
+      - name: Checksums
+        run: cd dist && sha256sum *.zip > SHA256SUMS.txt && cat SHA256SUMS.txt
+      - uses: softprops/action-gh-release@v2
+        with:
+          files: |
+            dist/*.zip
+            dist/SHA256SUMS.txt
+          generate_release_notes: true
