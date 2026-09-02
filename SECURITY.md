@@ -29,4 +29,11 @@ taskdeck は **利用者の PC の中だけで動く**ツールで、サーバ�
 - CSRF / DNS rebinding については、サーバーが Host・Origin・Sec-Fetch-Site・Content-Type を検査して
   自分自身（`localhost` / `127.0.0.1`）以外からの書き込みを拒否します（`src/server.js` の `rejectCrossSite`、
   テストは `test/server.test.mjs`）。この検査を迂回できる場合は報告してください
-- 「全自動（`--dangerously-skip-permissions`）」モードは信頼できるタスクにだけ使う前提です
+- プロンプトインジェクションについては、`claude -p` に渡すプロンプトでタスクのタイトル・メモを
+  データ区画（`<<<taskdeck-task>>>` … `<<<end-taskdeck-task>>>`）で囲み、区画内の文が作業範囲を超える操作
+  （作業ディレクトリ外の変更・秘密情報の送信・注意書きの無効化など）を求めても従わないよう指示しています
+  （`src/dispatch.js` の `buildPrompt`、テストは `test/dispatch.test.mjs`）。UI では MCP 経由で登録された
+  タスクに注意を表示し、全自動モードは毎回確認ダイアログを出します。
+  **これはプロンプト上の対策であり、モデルが必ず従う保証はありません**
+- 「全自動（`--dangerously-skip-permissions`）」モードは信頼できるタスクにだけ使う前提です。
+  AI エージェントや他人が書いたタスクは、内容を読んでから「安全」モードで実行してください
