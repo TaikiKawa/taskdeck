@@ -1,0 +1,23 @@
+name: 機能要望
+description: こういうことができると嬉しい
+labels: ["enhancement"]
+body:
+  - type: textarea
+    id: problem
+    attributes:
+      label: 困っていること
+      description: どんな場面で何が不便か
+    validations:
+      required: true
+  - type: textarea
+    id: proposal
+    attributes:
+      label: 提案
+      description: こうなっていると良い、という案があれば
+  - type: checkboxes
+    id: scope
+    attributes:
+      label: 方針との整合
+      options:
+        - label: 完全ローカル（クラウドに何も送らない）の方針と矛盾しない
+        - label: 新しい依存パッケージを増やさない、または増やす理由を書いた

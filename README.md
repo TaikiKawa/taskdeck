@@ -195,6 +195,12 @@ node scripts/package.mjs --platform win32  --arch x64         # dist/taskdeck-<v
 git tag v0.1.0 && git push origin v0.1.0
 ```
 
+## 貢献・セキュリティ・ライセンス
+
+- バグ報告や機能要望は Issue テンプレートから。PR の前に [CONTRIBUTING.md](CONTRIBUTING.md) を一読してほしい
+- **脆弱性は Issue に書かず**、[SECURITY.md](SECURITY.md) の手順（GitHub の Private vulnerability reporting）で非公開に報告してほしい
+- ライセンスは [MIT](LICENSE)。配布版に同梱している Node.js のライセンスは `node/LICENSE` に入っている
+
 ## 環境変数
 
 - `TASKDECK_PORT` — UIのポート（デフォルト 4747）

@@ -1,0 +1,46 @@
+# PR と main への push で、依存の取得・構文チェック・サーバー起動のスモークテストを行う。
+# 外部入力 (PR タイトルや本文) は一切使わない。書き込み権限は持たない。
+name: ci
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    strategy:
+      matrix:
+        os: [ubuntu-latest, windows-latest, macos-14]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+        with:
+          node-version: "22"
+          cache: npm
+      - run: npm ci
+      - name: Syntax check
+        run: node --check src/server.js && node --check src/db.js && node --check src/dispatch.js && node --check src/mcp.js && node --check scripts/register-mcp.js && node --check scripts/package.mjs
+      - name: Smoke test (start server, create and list a task)
+        shell: bash
+        env:
+          TASKDECK_PORT: "4799"
+          TASKDECK_DIR: ${{ runner.temp }}/taskdeck-ci
+        run: |
+          node src/server.js & echo $! > server.pid
+          node -e '
+            const b = "http://127.0.0.1:4799";
+            (async () => {
+              for (let i = 0; i < 40; i++) { try { await fetch(b + "/api/projects"); break; } catch { await new Promise(r => setTimeout(r, 250)); } }
+              const t = await (await fetch(b + "/api/tasks", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ title: "ci", project: "ci" }) })).json();
+              if (!t.id) throw new Error("task not created");
+              const list = await (await fetch(b + "/api/tasks?project=ci")).json();
+              if (!list.some(x => x.id === t.id)) throw new Error("task not listed");
+              console.log("ok", t.id);
+            })().catch(e => { console.error(e); process.exit(1); });
+          '
+          kill "$(cat server.pid)"
