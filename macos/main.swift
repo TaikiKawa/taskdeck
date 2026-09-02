@@ -13,6 +13,32 @@ class AppDelegate: NSObject, NSApplicationDelegate, WKUIDelegate {
         return nil
     }
 
+    // JavaScript の confirm() / alert() をネイティブのダイアログで出す。
+    // WKWebView は実装が無いと confirm() が常に false を返し、確認ダイアログが
+    // 「キャンセル」扱いになる (全自動モードの確認やグループ削除の確認が通らない)。
+    func webView(
+        _ webView: WKWebView, runJavaScriptConfirmPanelWithMessage message: String,
+        initiatedByFrame frame: WKFrameInfo, completionHandler: @escaping (Bool) -> Void
+    ) {
+        let alert = NSAlert()
+        alert.messageText = message
+        alert.alertStyle = .warning
+        alert.addButton(withTitle: "OK")
+        alert.addButton(withTitle: "キャンセル")
+        completionHandler(alert.runModal() == .alertFirstButtonReturn)
+    }
+
+    func webView(
+        _ webView: WKWebView, runJavaScriptAlertPanelWithMessage message: String,
+        initiatedByFrame frame: WKFrameInfo, completionHandler: @escaping () -> Void
+    ) {
+        let alert = NSAlert()
+        alert.messageText = message
+        alert.addButton(withTitle: "OK")
+        alert.runModal()
+        completionHandler()
+    }
+
     static func main() {
         let app = NSApplication.shared
         let delegate = AppDelegate()

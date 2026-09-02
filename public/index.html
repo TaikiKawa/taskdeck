@@ -368,6 +368,10 @@
       </select>
     </div>
     <p id="dispatchHint" style="margin:10px 0 0;font-size:11px;color:var(--muted);line-height:1.6;"></p>
+    <p id="dispatchOriginWarn" hidden style="margin:10px 0 0;font-size:11px;line-height:1.6;padding:8px 10px;border-radius:6px;background:rgba(255,180,0,.12);border:1px solid rgba(255,180,0,.45);">
+      ⚠️ このタスクは AI エージェント（MCP）経由で登録されました。タイトルとメモは人間が書いたものとは限りません。
+      内容を確認してから実行し、全自動モードは避けてください。
+    </p>
     <div class="dialog-actions">
       <button type="button" class="ghost" id="dispatchCancel">キャンセル</button>
       <button type="submit" class="primary">▶ 実行</button>
@@ -921,6 +925,10 @@ async function openDispatchDialog(t) {
   try { savedTarget = localStorage.getItem(DISPATCH_TARGET_KEY) || "desktop"; } catch {}
   $("#dispatchTarget").value = savedTarget;
   if (!$("#dispatchTarget").value) $("#dispatchTarget").value = "desktop";
+  // 権限モードは記憶しない。全自動は毎回選び直す (前回の選択が残らないようにする)
+  $("#dispatchMode").value = "safe";
+  // MCP 経由 (AI が登録) のタスクはプロンプトインジェクションの入口になりうるので注意を出す
+  $("#dispatchOriginWarn").hidden = !t.session;
   syncDispatchTargetUI();
   const sessionSel = $("#dispatchSession");
   const canResume = isClaudeSession(t.session);
@@ -948,6 +956,15 @@ $("#dispatchForm").addEventListener("submit", async () => {
   const mode = $("#dispatchMode").value;
   const target = $("#dispatchTarget").value;
   const resume = target === "headless" && $("#dispatchSession").value === "resume";
+  if (target === "headless" && mode === "full") {
+    // --dangerously-skip-permissions はタスク本文に紛れ込んだ指示もそのまま実行しうるので毎回確認する
+    const ok = confirm(
+      `全自動モードで実行します。\n\n#${t.id} 「${t.title}」\n作業ディレクトリ: ${cwd}\n\n` +
+      "claude はすべてのコマンドを確認なしで実行します。タスクのタイトルとメモに" +
+      "（AI や他人が書いた文も含めて）意図しない指示が入っていないか確認しましたか？"
+    );
+    if (!ok) return;
+  }
   try {
     await api(`/api/tasks/${t.id}/dispatch`, {
       method: "POST", body: JSON.stringify({ cwd, mode, resume, target }),
