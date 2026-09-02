@@ -7,7 +7,8 @@
   "scripts": {
     "ui": "node src/server.js",
     "mcp": "node src/mcp.js",
-    "mcp:register": "node scripts/register-mcp.js"
+    "mcp:register": "node scripts/register-mcp.js",
+    "test": "node --test \"test/*.test.mjs\""
   },
   "dependencies": {
     "@modelcontextprotocol/sdk": "^1.12.0",
