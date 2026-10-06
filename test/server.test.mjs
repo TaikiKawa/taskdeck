@@ -55,9 +55,14 @@ before(async () => {
   throw new Error("server did not start");
 });
 
-after(() => {
-  server?.kill();
-  rmSync(dataDir, { recursive: true, force: true });
+after(async () => {
+  // Windows は kill() 直後もプロセスが DB を掴んでいて unlink が EBUSY になるので、終了を待ってから消す
+  if (server && server.exitCode === null && server.signalCode === null) {
+    const exited = new Promise((resolve) => server.once("exit", resolve));
+    server.kill();
+    await exited;
+  }
+  rmSync(dataDir, { recursive: true, force: true, maxRetries: 10, retryDelay: 100 });
 });
 
 describe("smoke", () => {
