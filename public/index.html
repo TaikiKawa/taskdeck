@@ -754,8 +754,7 @@
     <p id="dispatchHint" class="hint"></p>
     <p id="dispatchOriginWarn" class="warn-box" hidden>
       <svg class="ico" viewBox="0 0 16 16" aria-hidden="true"><circle cx="8" cy="8" r="6"/><path d="M5.5 8h5"/></svg>
-      <span>このタスクは AI エージェント（MCP）経由で登録されました。タイトルとメモは人間が書いたものとは限りません。
-      内容を確認してから実行し、全自動モードは避けてください。</span>
+      <span id="dispatchOriginText"></span>
     </p>
     <div class="dialog-actions">
       <button type="button" class="ghost" id="dispatchCancel">キャンセル</button>
@@ -1059,7 +1058,7 @@ function render() {
 // リンクのhrefは https?: で始まるものだけ許可するため、任意HTML/JSは注入できない。
 function escapeHtml(s) {
   return s.replace(/&/g, "&amp;").replace(/</g, "&lt;")
-    .replace(/>/g, "&gt;").replace(/"/g, "&quot;");
+    .replace(/>/g, "&gt;").replace(/"/g, "&quot;").replace(/'/g, "&#39;");
 }
 function mdInline(s) {
   s = s.replace(/`([^`]+)`/g, "<code>$1</code>");
@@ -1684,8 +1683,12 @@ async function openDispatchDialog(t, { resumeSession = null } = {}) {
   }
   // 権限モードは記憶しない。全自動は毎回選び直す (前回の選択が残らないようにする)
   $("#dispatchMode").value = "safe";
-  // MCP 経由 (AI が登録) のタスクはプロンプトインジェクションの入口になりうるので注意を出す
-  $("#dispatchOriginWarn").hidden = !t.session;
+  // MCP 経由 (AI が登録) のタスクと Notion のタスク (他人も書ける) は、
+  // プロンプトインジェクションの入口になりうるので注意を出す
+  $("#dispatchOriginWarn").hidden = !t.session && !t.notion_page_id;
+  $("#dispatchOriginText").textContent = t.notion_page_id
+    ? "このタスクは Notion から同期しています。ページの本文とプロパティは、あなた以外の人も書き換えられます。AI には本文もそのまま渡るので、内容を確認してから実行し、全自動モードは避けてください。"
+    : "このタスクは AI エージェント（MCP）経由で登録されました。タイトルとメモは人間が書いたものとは限りません。内容を確認してから実行し、全自動モードは避けてください。";
   syncDispatchTargetUI();
   const sessionSel = $("#dispatchSession");
   const canResume = isClaudeSession(t.session) || !!resumeSession;
@@ -1722,6 +1725,9 @@ $("#dispatchForm").addEventListener("submit", async () => {
     // --dangerously-skip-permissions はタスク本文に紛れ込んだ指示もそのまま実行しうるので毎回確認する
     const ok = confirm(
       `全自動モードで実行します。\n\n#${t.id} 「${t.title}」\n作業ディレクトリ: ${cwd}\n\n` +
+      (t.notion_page_id
+        ? "このタスクは Notion から同期しています。Notion ページの本文（他人も書き換えられます）も AI に渡ります。\n\n"
+        : "") +
       `${target === "codex" ? "codex" : "claude"} はすべてのコマンドを確認なしで実行します。タスクのタイトルとメモに` +
       "（AI や他人が書いた文も含めて）意図しない指示が入っていないか確認しましたか？"
     );
@@ -1817,8 +1823,10 @@ function renderNotionProps(t) {
   }
   const body = $("#notionBody");
   $("#notionBodyBlock").hidden = !(isNotion && t.notion_body);
-  // 本文はエスケープしてから整形（mdRender）するので HTML は注入されない
-  if (isNotion && t.notion_body) body.innerHTML = mdRender(t.notion_body);
+  // Notion の本文は他人も書ける外部の内容。mdRender の出力をそのまま innerHTML に入れず、
+  // sanitizeDoc（実行されない DOMParser で読み、許可タグと https のリンク以外を落とす）を通してから差し込む
+  if (isNotion && t.notion_body) body.replaceChildren(...sanitizeDoc(mdRender(t.notion_body)).body.childNodes);
+  else body.replaceChildren();
 }
 
 // ---- 表示するプロパティの編集 ----
