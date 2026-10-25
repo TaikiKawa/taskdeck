@@ -190,7 +190,7 @@
   }
 
   /* ==== 入力・セレクト（components.md §6: 高さ 28、角丸 6、control 地） ==== */
-  select, input[type=text] {
+  select, input[type=text], input[type=password] {
     height: var(--control-h);
     background-color: var(--alche-control); color: var(--alche-text);
     border: 1px solid var(--control-edge); border-radius: var(--alche-radius-control);
@@ -198,7 +198,7 @@
     outline: none;
     transition: background-color var(--alche-dur-window-hover);
   }
-  input[type=text]::placeholder { color: var(--alche-text3); }
+  input[type=text]::placeholder, input[type=password]::placeholder { color: var(--alche-text3); }
   select {
     -webkit-appearance: none; appearance: none; cursor: default;
     padding-right: 26px;
@@ -207,7 +207,7 @@
   }
   select:hover { background-color: var(--alche-hover); }
   input[type=text]:focus-visible, select:focus-visible,
-  input[type=text]:focus {
+  input[type=text]:focus, input[type=password]:focus-visible, input[type=password]:focus {
     outline: 2px solid var(--alche-focus-ring); outline-offset: 1px;
   }
   #quickAdd { flex: 1; min-width: 200px; }
@@ -519,6 +519,104 @@
   .empty {
     color: var(--alche-text3); font-size: 12px; text-align: center; padding: 20px 0;
   }
+  /* Notion から同期したタスク: 「N」の小さな印と Notion 側のステータス名 */
+  .chip.notion { background: none; color: var(--alche-text2); border-color: var(--alche-separator); }
+  .chip.notion .n-mark {
+    display: inline-grid; place-items: center; width: 12px; height: 12px; border-radius: 3px;
+    border: 1px solid currentColor; font-size: 8px; font-weight: 700; line-height: 1;
+  }
+  /* AI セッションの紐付け: 作業中は濃く、過去の紐付けは枠だけ */
+  .chip.session { background: none; color: var(--alche-text2); border-color: var(--alche-separator); }
+  .chip.session.active { background: var(--alche-control); color: var(--alche-text); border-color: var(--control-edge); }
+  .chip.session.active.is-live {
+    background: var(--alche-live); color: var(--alche-on-live); border-color: var(--live-edge); font-weight: 600;
+  }
+  .panel-link {
+    display: inline-flex; align-items: center; gap: 6px; font-size: 12px; color: var(--alche-text);
+    text-decoration: none; padding: 2px 8px; border-radius: var(--alche-radius-control);
+    border: 1px solid var(--alche-separator);
+  }
+  .panel-link:hover { background: var(--alche-hover); }
+  .sessions { display: flex; flex-direction: column; gap: 6px; margin: 4px 0 12px; }
+  .session-row {
+    display: grid; grid-template-columns: auto 1fr auto; gap: 2px 8px; align-items: center;
+    padding: 6px 8px; border-radius: var(--alche-radius-control); background: var(--alche-control);
+    font-size: 12px;
+  }
+  .session-row .s-title { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .session-row .s-sub { grid-column: 2 / 4; color: var(--alche-text2); font-size: var(--alche-caption-size);
+    overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .session-row .s-actions { display: flex; gap: 2px; }
+  .session-row .icon-btn { height: 22px; padding: 0 6px; font-size: var(--alche-caption-size); }
+  /* Notion 連携ダイアログ */
+  #notionDialog { width: min(560px, 94vw); }
+  .source-list { display: flex; flex-direction: column; gap: 6px; margin-top: 10px; }
+  .source-row {
+    display: flex; gap: 8px; align-items: center; padding: 8px 10px; font-size: 12px;
+    border: 1px solid var(--alche-separator); border-radius: var(--alche-radius-control);
+  }
+  .source-row .grow { flex: 1; min-width: 0; }
+  .source-row .sub { color: var(--alche-text2); font-size: var(--alche-caption-size); }
+  .source-row .err { color: var(--alche-danger); font-size: var(--alche-caption-size); }
+  .step { margin-top: 16px; }
+  .step-head { display: flex; align-items: center; gap: 8px; font-size: 13px; font-weight: 600; }
+  /* サブカラーのイエロー: 黒文字を載せた面として使う(ライト/ダークどちらでも読める) */
+  .step-no {
+    display: inline-grid; place-items: center; width: 18px; height: 18px; border-radius: 50%;
+    background: var(--alche-live); color: var(--alche-on-live); font-size: 11px; font-weight: 700;
+    border: 1px solid var(--live-edge);
+  }
+  button.accent {
+    background: var(--alche-live); color: var(--alche-on-live); border-color: var(--live-edge); font-weight: 600;
+  }
+  button.accent:hover { filter: brightness(.95); }
+  .n-props { display: grid; grid-template-columns: auto 1fr; gap: 6px 12px; margin: 4px 0 12px; font-size: 12px; align-items: start; }
+  .n-props .k { color: var(--alche-text2); white-space: nowrap; padding-top: 1px; }
+  .n-props .v { color: var(--alche-text); word-break: break-word; line-height: 1.5; }
+  .n-props .v a { color: var(--alche-text); text-decoration: none; border-bottom: 1px solid var(--alche-separator); }
+  .n-props .v a:hover { border-bottom-color: var(--alche-text); }
+  .n-props .v .rel { display: block; }
+  .you { background: var(--alche-live); color: var(--alche-on-live); border-radius: 4px; padding: 0 4px; font-weight: 600; }
+  .section-head { display: flex; align-items: center; gap: 8px; }
+  .section-head .spacer { flex: 1; }
+  .section-head .icon-btn { height: 22px; padding: 0 6px; font-size: var(--alche-caption-size); }
+  .notion-body { font-size: 13px; line-height: 1.7; color: var(--alche-text); margin-bottom: 12px;
+    padding: 10px 12px; border-radius: var(--alche-radius-control); background: var(--alche-control); }
+  .notion-body h1, .notion-body h2, .notion-body h3 { font-size: 13px; margin: 10px 0 4px; }
+  .notion-body h1:first-child, .notion-body h2:first-child, .notion-body h3:first-child { margin-top: 0; }
+  .notion-body p { margin: 0; }
+  .notion-body ul, .notion-body ol { margin: 2px 0; padding-left: 18px; }
+  .card .card-props { display: flex; flex-wrap: wrap; gap: 2px 10px; font-size: var(--alche-caption-size); color: var(--alche-text2); margin-top: 4px; }
+  .card .card-props b { font-weight: 500; color: var(--alche-text3); margin-right: 4px; }
+  #propsDialog { width: min(440px, 92vw); }
+  .prop-rows { display: flex; flex-direction: column; gap: 4px; margin-top: 12px; max-height: 55vh; overflow-y: auto; }
+  .prop-row { display: grid; grid-template-columns: 1fr auto auto auto; gap: 6px; align-items: center;
+    padding: 4px 8px; border-radius: var(--alche-radius-control); font-size: 12px; }
+  .prop-row.on { background: var(--alche-control); }
+  .prop-row .name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .prop-row .name small { color: var(--alche-text3); margin-left: 6px; }
+  .prop-row label { display: inline-flex; align-items: center; gap: 4px; margin: 0; font-size: 11px; color: var(--alche-text2); }
+  .prop-row .move { display: flex; }
+  .prop-row .move .icon-btn { height: 22px; width: 22px; padding: 0; justify-content: center; }
+  .me-row { display: flex; gap: 8px; align-items: center; margin-top: 8px; }
+  .me-row input { flex: 1; }
+  .step label:first-of-type { margin-top: 8px; }
+  .col-map { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 8px; margin-top: 10px; }
+  .col-map > div { padding: 6px 8px; border-radius: var(--alche-radius-control); background: var(--alche-control); min-height: 44px; }
+  .col-name { font-size: 11px; font-weight: 600; color: var(--alche-text); }
+  .col-from { font-size: 11px; color: var(--alche-text2); line-height: 1.5; margin-top: 2px; }
+  .preview-box {
+    margin-top: 16px; padding: 10px 12px; font-size: 12px; line-height: 1.6;
+    border-left: 3px solid var(--alche-live); background: var(--alche-control);
+    border-radius: 0 var(--alche-radius-control) var(--alche-radius-control) 0;
+  }
+  .preview-box:empty { display: none; }
+  .preview-box .sample { color: var(--alche-text2); }
+  .grid2 { display: grid; grid-template-columns: 1fr 1fr; gap: 0 12px; }
+  .grid3 { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 0 8px; }
+  dialog input[type=password] { width: 100%; }
+  .dialog-section { margin-top: 18px; padding-top: 14px; border-top: 1px solid var(--alche-separator); }
+  .dialog-section:first-of-type { border-top: none; padding-top: 0; }
 </style>
 <script>
   // Windows では角丸 4・本文 14（alche-app-design tokens の data-platform）。表示専用
@@ -535,7 +633,10 @@
     <option value="priority">優先度順</option>
   </select>
   <button type="button" class="ghost" id="newProjectBtn" title="新しいグループを作成"><svg class="ico" viewBox="0 0 16 16" aria-hidden="true"><path d="M8 3.5v9M3.5 8h9"/></svg>グループ</button>
-  <button type="button" class="ghost" id="deleteProjectBtn" title="選択中の空グループを削除" hidden><svg class="ico" viewBox="0 0 16 16" aria-hidden="true"><path d="M3 4.5h10M6.5 4.5V3h3v1.5M4.5 4.5l.6 8.5h5.8l.6-8.5"/></svg>グループを削除</button>
+  <button type="button" class="ghost" id="renameProjectBtn" title="選択中のグループの名前を変更" hidden><svg class="ico" viewBox="0 0 16 16" aria-hidden="true"><path d="M10.5 3.5l2 2-6.5 6.5H4v-2zM9 5l2 2"/></svg>名前を変更</button>
+  <button type="button" class="ghost" id="deleteProjectBtn" title="選択中のグループをタスクごと削除" hidden><svg class="ico" viewBox="0 0 16 16" aria-hidden="true"><path d="M3 4.5h10M6.5 4.5V3h3v1.5M4.5 4.5l.6 8.5h5.8l.6-8.5"/></svg>グループを削除</button>
+  <button type="button" class="ghost" id="notionBtn" title="Notion のデータベースを同期"><span class="n-mark" aria-hidden="true" style="display:inline-grid;place-items:center;width:14px;height:14px;border:1.5px solid currentColor;border-radius:3px;font-size:9px;font-weight:700">N</span>Notion</button>
+  <button type="button" class="ghost" id="notionRefreshBtn" title="Notion の最新の内容を今すぐ取り込む" hidden><svg class="ico" viewBox="0 0 16 16" aria-hidden="true"><path d="M12.5 8a4.5 4.5 0 1 1-1.3-3.2M12.5 3.5v2.5H10"/></svg><span class="label">更新</span></button>
   <span class="toolbar-sep" aria-hidden="true"></span>
   <form id="quickAddForm" style="display:contents">
     <input id="quickAdd" type="text" autocomplete="off" aria-label="タスクを追加" placeholder="タスクを追加（先頭に #プロジェクト名 でグループ指定）">
@@ -563,7 +664,7 @@
     <button class="icon-btn" id="panelClose" title="閉じる (Esc)" aria-label="閉じる"><svg class="ico" viewBox="0 0 16 16" aria-hidden="true"><path d="M4.5 4.5l7 7M11.5 4.5l-7 7"/></svg></button>
     <span class="task-id" id="panelTaskId"></span>
     <span class="spacer"></span>
-    <button class="icon-btn" id="panelDispatch" title="Claude Codeに依頼"><svg class="ico" viewBox="0 0 16 16" aria-hidden="true"><path d="M3.5 5l3 3-3 3M8.5 11.5h4"/></svg>Claude に依頼</button>
+    <button class="icon-btn" id="panelDispatch" title="AI に依頼"><svg class="ico" viewBox="0 0 16 16" aria-hidden="true"><path d="M3.5 5l3 3-3 3M8.5 11.5h4"/></svg>AI に依頼</button>
     <button class="icon-btn del" id="panelDelete" title="タスクを削除"><svg class="ico" viewBox="0 0 16 16" aria-hidden="true"><path d="M3 4.5h10M6.5 4.5V3h3v1.5M4.5 4.5l.6 8.5h5.8l.6-8.5"/></svg>削除</button>
   </div>
   <div class="panel-body">
@@ -584,8 +685,23 @@
       </select>
       <span class="prop-label">グループ</span>
       <input id="propProject" type="text" aria-label="グループ">
+      <span class="prop-label" id="propNotionLabel" hidden>Notion</span>
+      <span id="propNotion" hidden></span>
     </div>
-    <div class="notes-head">メモ</div>
+    <div id="notionPropsBlock" hidden>
+      <div class="notes-head section-head"><span>Notion のプロパティ</span><span class="spacer"></span>
+        <button type="button" class="icon-btn" id="editPropsBtn" title="表示するプロパティと順番を選ぶ">表示を編集</button></div>
+      <div class="n-props" id="notionPropsList"></div>
+    </div>
+    <div id="notionBodyBlock" hidden>
+      <div class="notes-head">Notion の本文</div>
+      <div class="notion-body" id="notionBody"></div>
+    </div>
+    <div id="sessionsBlock" hidden>
+      <div class="notes-head">AI セッション</div>
+      <div class="sessions" id="sessionsList"></div>
+    </div>
+    <div class="notes-head" id="notesHead">メモ</div>
     <div id="notesEditor" class="notes-view" contenteditable="true" spellcheck="false"></div>
     <div class="notes-hint">「# 」「- 」「1. 」で見出し・リスト、**太字**・*斜体*・`コード` は入力で変換。<kbd>⌘B</kbd> 太字　<kbd>⌘I</kbd> 斜体　<kbd>⌘E</kbd> コード　<kbd>⌘⇧S</kbd> 打ち消し　<kbd>⌘K</kbd> リンク　<kbd>⌘⌥1</kbd>〜<kbd>3</kbd> 見出し　<kbd>⌘⌥0</kbd> 本文。URL貼り付けでリンク、リンクはクリックで開く</div>
   </div>
@@ -609,13 +725,14 @@
 
 <dialog id="dispatchDialog">
   <form method="dialog" id="dispatchForm">
-    <h3>Claude Code に依頼</h3>
+    <h3>AI に依頼</h3>
     <p id="dispatchTaskTitle" class="dialog-sub"></p>
     <label for="dispatchTarget">実行先</label>
     <select id="dispatchTarget" style="width:100%">
       <option value="desktop">デスクトップアプリで開く — Claude Code</option>
       <option value="cowork">デスクトップアプリで開く — Cowork</option>
       <option value="headless">バックグラウンドで実行 — claude CLI</option>
+      <option value="codex">バックグラウンドで実行 — Codex CLI</option>
     </select>
     <div id="dispatchResumeRow">
       <label for="dispatchSession">実行モード</label>
@@ -643,6 +760,115 @@
     <div class="dialog-actions">
       <button type="button" class="ghost" id="dispatchCancel">キャンセル</button>
       <button type="submit" class="primary">実行</button>
+    </div>
+  </form>
+</dialog>
+
+<dialog id="notionDialog">
+  <form method="dialog" id="notionForm">
+    <h3>Notion のデータベースを同期</h3>
+    <p class="dialog-sub">担当者に自分が入っている行だけをボードに表示します。ステータスとタイトルの変更は Notion に書き戻します。</p>
+
+    <div class="dialog-section" id="notionTokenSection">
+      <label for="notionToken">インテグレーションのトークン</label>
+      <input type="password" id="notionToken" autocomplete="off" spellcheck="false" placeholder="ntn_… / secret_…">
+      <p class="hint">Notion の「設定 → コネクト → インテグレーションを作成または管理」で内部インテグレーションを作り、トークンを貼ってください。
+      同期したいデータベースの「…」→「コネクト」から、そのインテグレーションを追加しておく必要があります。トークンはこの Mac の <code>~/.taskdeck/notion.json</code> にだけ保存されます。</p>
+      <div class="dialog-actions" style="margin-top:10px"><button type="button" id="notionTokenSave">トークンを保存</button></div>
+    </div>
+
+    <div class="dialog-section" id="notionSourcesSection">
+      <div style="display:flex;align-items:center;gap:8px">
+        <strong style="font-size:13px">同期中のデータベース</strong>
+        <span class="spacer" style="flex:1"></span>
+        <button type="button" class="ghost" id="notionSyncNow">今すぐ同期</button>
+        <button type="button" class="ghost" id="notionTokenChange">トークンを変更</button>
+      </div>
+      <div class="source-list" id="notionSources"></div>
+    </div>
+
+    <div class="dialog-section" id="notionAddSection">
+      <label for="notionUrl">データベースのリンクを追加</label>
+      <div style="display:flex;gap:8px">
+        <input type="text" id="notionUrl" autocomplete="off" spellcheck="false" placeholder="https://www.notion.so/…" style="flex:1">
+        <button type="button" id="notionInspect">読み込む</button>
+      </div>
+      <div id="notionConfig" hidden>
+        <p class="dialog-sub" id="notionDbTitle" style="margin-top:10px"></p>
+
+        <div class="step">
+          <div class="step-head"><span class="step-no">1</span>誰のタスクを取り込むか</div>
+          <div class="grid2">
+            <div><label for="notionPeopleProp">担当者が入っているプロパティ</label><select id="notionPeopleProp"></select></div>
+            <div><label for="notionPerson">あなた</label><select id="notionPerson"></select></div>
+          </div>
+          <div class="me-row" id="notionMeRow" hidden>
+            <input type="text" id="notionMeId" autocomplete="off" spellcheck="false" placeholder="Notion のユーザー ID（例: 83be95d6-…）" aria-label="あなたの Notion ユーザー ID">
+          </div>
+          <p class="hint" id="notionPeopleHint"></p>
+        </div>
+
+        <div class="step">
+          <div class="step-head"><span class="step-no">2</span>ステータスとボードの列の対応</div>
+          <label for="notionStatusProp">ステータスのプロパティ</label>
+          <select id="notionStatusProp"></select>
+          <div id="notionWritebackRow">
+            <div class="col-map">
+              <div><div class="col-name">Todo</div><div class="col-from" id="notionMapTodo"></div></div>
+              <div><div class="col-name">Doing</div><div class="col-from" id="notionMapDoing"></div></div>
+              <div><div class="col-name">Done</div><div class="col-from" id="notionMapDone"></div></div>
+            </div>
+            <label>カードをその列に動かしたとき、Notion に書き込むステータス</label>
+            <div class="grid3">
+              <select id="notionWbTodo" aria-label="Todo に動かしたときのステータス"></select>
+              <select id="notionWbDoing" aria-label="Doing に動かしたときのステータス"></select>
+              <select id="notionWbDone" aria-label="Done に動かしたときのステータス"></select>
+            </div>
+            <p class="hint">すでに同じ列に入るステータスなら書き換えません（例: 「レビュー中」のカードを Doing に置いたままでも「作業中」には戻しません）。</p>
+          </div>
+        </div>
+
+        <div class="step">
+          <div class="step-head"><span class="step-no">3</span>ボード上のグループ</div>
+          <select id="notionProjectProp" aria-label="グループ分けに使うプロパティ"></select>
+          <p class="hint">選んだプロパティの値ごとにグループが分かれます。データベース名にすると、全部ひとつのグループに入ります。</p>
+        </div>
+
+        <div class="preview-box" id="notionPreview" role="status" aria-live="polite"></div>
+      </div>
+    </div>
+    <div class="dialog-actions">
+      <button type="button" class="ghost" id="notionClose">閉じる</button>
+      <button type="button" class="accent" id="notionAdd" hidden>追加して同期</button>
+    </div>
+  </form>
+</dialog>
+
+<dialog id="propsDialog">
+  <form method="dialog" id="propsForm">
+    <h3>表示するプロパティ</h3>
+    <p class="dialog-sub" id="propsDialogSub"></p>
+    <div class="prop-rows" id="propRows"></div>
+    <p class="hint">「表示」は詳細パネル、「カード」はボードのカードにも出します。↑↓ で順番を変えられます。値が空のプロパティは表示しません。</p>
+    <div class="dialog-actions">
+      <button type="button" class="ghost" id="propsReset">おまかせに戻す</button>
+      <span style="flex:1"></span>
+      <button type="button" class="ghost" id="propsCancel">キャンセル</button>
+      <button type="button" class="accent" id="propsSave">保存</button>
+    </div>
+  </form>
+</dialog>
+
+<dialog id="renameDialog">
+  <form method="dialog" id="renameForm">
+    <h3>グループの名前を変更</h3>
+    <p class="dialog-sub" id="renameSub"></p>
+    <label for="renameName">新しい名前</label>
+    <input type="text" id="renameName" required autocomplete="off">
+    <p class="hint" id="renameHint"></p>
+    <div class="dialog-actions">
+      <button type="button" class="ghost" id="renameCancel">キャンセル</button>
+      <button type="submit" class="accent">変更</button>
     </div>
   </form>
 </dialog>
@@ -759,11 +985,14 @@ async function api(path, opts = {}) {
 
 async function refresh() {
   const q = state.project ? `?project=${encodeURIComponent(state.project)}` : "";
-  const [tasks, projects, runs] = await Promise.all([
+  const [tasks, projects, runs, notionState] = await Promise.all([
     api(`/api/tasks${q}`),
     api("/api/projects"),
     api("/api/runs"),
+    api("/api/notion").catch(() => ({ sources: [] })),
   ]);
+  state.notionSources = Object.fromEntries((notionState.sources || []).map((s) => [s.id, s]));
+  $("#notionRefreshBtn").hidden = !(notionState.configured && (notionState.sources || []).length);
   state.tasks = tasks;
   state.runs = Object.fromEntries(runs.map((r) => [r.taskId, r]));
   renderProjects(projects);
@@ -781,9 +1010,11 @@ function renderProjects(projects) {
   }
   sel.value = current;
   if (sel.value !== current) { state.project = ""; sel.value = ""; }
-  // 削除できるのは、選択中かつタスクが1件も無いグループだけ
+  // グループを選んでいるときだけ「グループを削除」を出す（タスクがあればタスクごと削除）
   const selected = projects.find((p) => p.project === state.project);
-  $("#deleteProjectBtn").hidden = !selected || selected.total > 0;
+  $("#deleteProjectBtn").hidden = !selected;
+  $("#renameProjectBtn").hidden = !selected;
+  state.projectNames = projects.map((p) => p.project);
 }
 
 const PRIORITY_RANK = { high: 0, medium: 1, low: 2, "": 3 };
@@ -906,6 +1137,125 @@ function taskIdEl(id) {
   return span;
 }
 
+// ---- Notion のプロパティ表示 ----
+// 同期元の display_props（[{name, card}]）があればその順で、無ければおまかせ:
+// システム系（作成・更新日時など）とステータス（別に表示）を除き、種類ごとに見やすい順に並べる
+const PROP_TYPE_ORDER = ["relation", "people", "date", "number", "select", "multi_select", "status",
+  "checkbox", "rich_text", "url", "email", "phone_number", "formula", "rollup", "unique_id", "files", "verification"];
+const SYSTEM_PROP_TYPES = new Set(["created_time", "last_edited_time", "created_by", "last_edited_by"]);
+function taskProps(t) {
+  try { return JSON.parse(t.notion_props || "[]"); } catch { return []; }
+}
+function displayPropsFor(t) {
+  const props = taskProps(t);
+  const src = state.notionSources?.[t.notion_source_id];
+  if (src?.display_props) {
+    const byName = Object.fromEntries(props.map((p) => [p.name, p]));
+    return src.display_props.filter((d) => byName[d.name]).map((d) => ({ ...byName[d.name], card: d.card }));
+  }
+  return props
+    .filter((p) => !SYSTEM_PROP_TYPES.has(p.type) && p.name !== src?.status_prop)
+    .map((p, i) => ({ ...p, card: p.type === "date", _i: i }))
+    .sort((a, b) => {
+      const ra = PROP_TYPE_ORDER.indexOf(a.type), rb = PROP_TYPE_ORDER.indexOf(b.type);
+      return (ra < 0 ? 99 : ra) - (rb < 0 ? 99 : rb) || a._i - b._i;
+    });
+}
+// 「あなた」だけイエローで目立たせる（表示専用）
+function propValueEl(p) {
+  const v = el("span", "v");
+  if (p.items?.length) {
+    for (const it of p.items) {
+      const a = el("a", "rel", it.title);
+      a.href = it.url;
+      a.target = "_blank";
+      a.rel = "noopener";
+      v.appendChild(a);
+    }
+    return v;
+  }
+  if (p.type === "people" || p.type === "created_by" || p.type === "last_edited_by") {
+    p.text.split("、").forEach((name, i) => {
+      if (i) v.appendChild(document.createTextNode("、"));
+      v.appendChild(name === "あなた" ? el("span", "you", name) : document.createTextNode(name));
+    });
+    return v;
+  }
+  v.textContent = p.text;
+  return v;
+}
+
+// ---- Notion / AI セッションの表示 ----
+const AGENT_LABEL = { claude: "Claude", codex: "Codex" };
+function notionChip(t) {
+  const chip = el("span", "chip notion");
+  const mark = el("span", "n-mark", "N");
+  mark.setAttribute("aria-hidden", "true");
+  chip.appendChild(mark);
+  chip.appendChild(document.createTextNode(t.external_status || "Notion"));
+  chip.title = "Notion から同期したタスク（ステータスは Notion のもの）";
+  return chip;
+}
+function timeAgo(iso) {
+  if (!iso) return "";
+  const sec = Math.max(0, (Date.now() - Date.parse(iso)) / 1000);
+  if (sec < 60) return "たった今";
+  if (sec < 3600) return `${Math.floor(sec / 60)}分前`;
+  if (sec < 86400) return `${Math.floor(sec / 3600)}時間前`;
+  return `${Math.floor(sec / 86400)}日前`;
+}
+function sessionChip(s) {
+  const who = AGENT_LABEL[s.agent] || s.agent;
+  // 作業中の表示は 1 件だけならイエロー（実行中の「生きている」と同じ扱い）
+  const live = s.active && !liveInToolbar && activeSessionCount() === 1;
+  const chip = el("span", "chip session" + (s.active ? " active" : "") + (live ? " is-live" : ""));
+  if (s.active) chip.appendChild(el("span", "live-dot"));
+  chip.appendChild(document.createTextNode(s.active ? `${who} 作業中` : `${who} ${timeAgo(s.last_activity_at)}`));
+  chip.title = [s.title, s.cwd, `セッション ${s.session_id}`].filter(Boolean).join("\n");
+  return chip;
+}
+function activeSessionCount() {
+  return state.tasks.filter((t) => (t.sessions || []).some((s) => s.active) && !(state.runs[t.id]?.status === "running")).length;
+}
+function resumeCommand(s) {
+  if (s.agent === "codex") return `codex resume ${s.session_id}`;
+  return `${s.cwd ? `cd ${JSON.stringify(s.cwd)} && ` : ""}claude --resume ${s.session_id}`;
+}
+async function copyText(text, label) {
+  try { await navigator.clipboard.writeText(text); showToast(`${label}をコピー`); }
+  catch { showToast(text); }
+}
+function renderSessions(t) {
+  const list = $("#sessionsList");
+  const sessions = t.sessions || [];
+  $("#sessionsBlock").hidden = !sessions.length;
+  list.replaceChildren();
+  for (const s of sessions) {
+    const row = el("div", "session-row");
+    const who = el("span", "chip session" + (s.active ? " active" : ""));
+    if (s.active) who.appendChild(el("span", "live-dot"));
+    who.appendChild(document.createTextNode(AGENT_LABEL[s.agent] || s.agent));
+    row.appendChild(who);
+    row.appendChild(el("span", "s-title", s.title || s.session_id));
+    const actions = el("span", "s-actions");
+    const copy = el("button", "icon-btn", "再開コマンド");
+    copy.title = resumeCommand(s);
+    copy.onclick = () => copyText(resumeCommand(s), "再開コマンド");
+    actions.appendChild(copy);
+    if (s.agent === "claude" && t.status !== "done") {
+      const cont = el("button", "icon-btn", "続きで依頼");
+      cont.title = "このセッションの続きとしてバックグラウンドで実行";
+      cont.onclick = () => openDispatchDialog(t, { resumeSession: s });
+      actions.appendChild(cont);
+    }
+    row.appendChild(actions);
+    const via = { mcp: "AI が着手を通知", dispatch: "🤖 から起動", scan: "会話ログから検出" }[s.via] || s.via;
+    row.appendChild(el("span", "s-sub",
+      `${s.active ? "作業中" : timeAgo(s.last_activity_at)} · ${via}${s.cwd ? ` · ${s.cwd}` : ""}`));
+    list.appendChild(row);
+  }
+}
+
 // ---- カード ----
 function cardEl(t) {
   const card = el("div", "card" + (t.status === "done" ? " done" : ""));
@@ -920,13 +1270,35 @@ function cardEl(t) {
   head.appendChild(title);
   card.appendChild(head);
   if (t.notes && notesPreview(t.notes)) card.appendChild(el("div", "notes", notesPreview(t.notes)));
+  else if (t.notion_body) card.appendChild(el("div", "notes", mdPlain(t.notion_body.split("\n").filter((l) => l.trim()).slice(0, 3).join(" "))));
+  if (t.notion_page_id) {
+    const shown = displayPropsFor(t).filter((p) => p.card && p.text);
+    if (shown.length) {
+      const line = el("div", "card-props");
+      for (const p of shown) {
+        const item = el("span");
+        item.appendChild(el("b", "", p.name));
+        item.appendChild(document.createTextNode(p.text));
+        line.appendChild(item);
+      }
+      card.appendChild(line);
+    }
+  }
 
   const meta = el("div", "meta");
   if (!state.project) meta.appendChild(el("span", "badge", t.project));
   if (t.priority) meta.appendChild(el("span", `chip p-${t.priority}`, PRIORITY_LABEL[t.priority]));
+  if (t.notion_page_id) meta.appendChild(notionChip(t));
   const run = state.runs[t.id];
+  // 🤖 で起動した実行が無いときは、紐付いた AI セッションを出す（作業中のものを優先）
+  if (!run || run.status !== "running") {
+    const s = (t.sessions || []).find((x) => x.active) || null;
+    if (s) meta.appendChild(sessionChip(s));
+    else if ((t.sessions || []).length && t.status !== "done") meta.appendChild(sessionChip(t.sessions[0]));
+  }
   if (run) {
-    const label = { running: "Claude 実行中", done: "Claude 完了", error: "Claude 失敗", stopped: "Claude 停止" }[run.status];
+    const who = AGENT_LABEL[run.agent] || "Claude";
+    const label = { running: `${who} 実行中`, done: `${who} 完了`, error: `${who} 失敗`, stopped: `${who} 停止` }[run.status];
     if (label) {
       const live = run.status === "running" && !liveInToolbar;
       const chip = el("span", `chip run-${run.status === "stopped" ? "error" : run.status}` + (live ? " is-live" : ""));
@@ -943,7 +1315,7 @@ function cardEl(t) {
   }
   meta.appendChild(el("span", "spacer"));
   if (run?.status === "running") {
-    const stopBtn = iconBtn("stop", "Claudeの実行を停止");
+    const stopBtn = iconBtn("stop", "AI の実行を停止");
     stopBtn.onclick = async (e) => {
       e.stopPropagation();
       try { await api(`/api/tasks/${t.id}/dispatch/stop`, { method: "POST" }); }
@@ -952,7 +1324,7 @@ function cardEl(t) {
     };
     meta.appendChild(stopBtn);
   } else if (t.status !== "done") {
-    const aiBtn = iconBtn("agent", "Claude Codeに依頼");
+    const aiBtn = iconBtn("agent", "AI に依頼（Claude / Codex）");
     aiBtn.onclick = (e) => { e.stopPropagation(); openDispatchDialog(t); };
     meta.appendChild(aiBtn);
   }
@@ -1181,15 +1553,78 @@ $("#projectForm").addEventListener("submit", async () => {
   refresh();
 });
 
+// ---- グループ名の変更 ----
+$("#renameProjectBtn").onclick = () => {
+  const name = state.project;
+  if (!name) return;
+  const notionCount = state.tasks.filter((t) => t.notion_page_id).length;
+  $("#renameSub").textContent = `「${name}」（タスク ${state.tasks.length} 件）`;
+  $("#renameHint").textContent = notionCount
+    ? `Notion のタスク ${notionCount} 件も新しい名前のグループに入ります。Notion 側の名前は変わりません（taskdeck の表示だけ変わり、次の同期以降もこの名前を使います）。`
+    : "同じ名前のグループが既にあれば、そのグループにまとめます。";
+  $("#renameName").value = name;
+  $("#renameDialog").showModal();
+  $("#renameName").select();
+};
+$("#renameCancel").onclick = () => $("#renameDialog").close();
+$("#renameForm").addEventListener("submit", async () => {
+  const from = state.project;
+  const to = $("#renameName").value.trim().replace(/^#/, "");
+  if (!from || !to || to === from) return;
+  if ((state.projectNames || []).includes(to) &&
+      !confirm(`グループ「${to}」は既にあります。「${from}」のタスクをそこにまとめますか？`)) return;
+  try {
+    await api(`/api/projects/${encodeURIComponent(from)}`, { method: "PATCH", body: JSON.stringify({ name: to }) });
+    state.project = to;
+    showToast(`グループ名を「${to}」に変更しました`);
+  } catch (err) {
+    showToast("名前を変更できませんでした — " + err.message);
+  }
+  refresh();
+});
+
+// ---- Notion を今すぐ取り込む ----
+$("#notionRefreshBtn").onclick = async () => {
+  const btn = $("#notionRefreshBtn");
+  if (btn.disabled) return;
+  btn.disabled = true;
+  $(".label", btn).textContent = "更新中…";
+  try {
+    const r = await api("/api/notion/sync", { method: "POST", body: "{}" });
+    const errors = (r.sources || []).filter((s) => s.last_error);
+    showToast(errors.length
+      ? `Notion を取り込めませんでした — ${errors[0].last_error}`
+      : r.changed ? `Notion から ${r.changed} 件の変更を取り込みました` : "Notion は最新です（変更なし）");
+  } catch (err) {
+    showToast("Notion を取り込めませんでした — " + err.message);
+  } finally {
+    btn.disabled = false;
+    $(".label", btn).textContent = "更新";
+    refresh();
+  }
+};
+
 $("#deleteProjectBtn").onclick = async () => {
   const name = state.project;
   if (!name) return;
-  if (!confirm(`空のグループ「${name}」を削除しますか？`)) return;
+  // state.tasks は選択中グループのタスクだけになっている
+  const tasks = state.tasks;
+  const notionCount = tasks.filter((t) => t.notion_page_id).length;
+  const local = tasks.length - notionCount;
+  const open = tasks.filter((t) => !t.notion_page_id && t.status !== "done").length;
+  let msg = local
+    ? `グループ「${name}」と、そのタスク ${local} 件（うち未完了 ${open} 件）を削除します。\n元に戻せません。よろしいですか？`
+    : `グループ「${name}」を削除しますか？`;
+  if (notionCount) msg += `\n\nNotion のタスク ${notionCount} 件は Notion で管理されているため、ボードに残ります。`;
+  if (!confirm(msg)) return;
   try {
-    await api(`/api/projects/${encodeURIComponent(name)}`, { method: "DELETE" });
-    state.project = "";
+    const r = await api(`/api/projects/${encodeURIComponent(name)}?with_tasks=1`, { method: "DELETE" });
+    if (!r.kept) state.project = "";
+    showToast(r.kept
+      ? `${r.deleted} 件を削除しました（Notion・実行中のタスク ${r.kept} 件は残しました）`
+      : `グループ「${name}」を削除しました`);
   } catch (err) {
-    alert(`グループを削除できませんでした: ${err.message}`);
+    showToast(`グループを削除できませんでした — ${err.message}`);
   }
   refresh();
 };
@@ -1201,17 +1636,23 @@ const isClaudeSession = (s) => /^[0-9a-f]{8}-[0-9a-f-]{27}$/i.test(s || "");
 const DISPATCH_TARGET_KEY = "taskdeck.dispatchTarget";
 
 const DISPATCH_HINTS = {
-  desktop: "Claude デスクトップアプリに、タスク内容が入った新規セッションが開きます。内容を確認して送信してください。",
+  desktop: "Claude デスクトップアプリに、タスク内容が入った新規セッションが開きます。内容を確認して送信してください。送信後のセッションは自動でこのタスクに紐付きます。",
   cowork: "Claude デスクトップアプリの Cowork に、タスク内容が入った新規セッションが開きます。",
   headless: "claude がバックグラウンドで実行され、進捗はカードのバッジと SSE で反映されます。完了・失敗時は実行ログがタスクのメモに追記されます。",
+  codex: "codex exec がバックグラウンドで実行されます（安全 = workspace-write サンドボックス）。完了・失敗時は実行ログがタスクのメモに追記されます。",
 };
+let dispatchResumeSession = null;
 
 function syncDispatchTargetUI() {
   const target = $("#dispatchTarget").value;
-  const headless = target === "headless";
-  $("#dispatchResumeRow").hidden = !headless;
+  const headless = target === "headless" || target === "codex";
+  $("#dispatchResumeRow").hidden = target !== "headless";
   $("#dispatchModeRow").hidden = !headless;
   $("#dispatchHint").textContent = DISPATCH_HINTS[target] || "";
+  const modeSel = $("#dispatchMode");
+  modeSel.options[0].textContent = target === "codex"
+    ? "安全 — ワークスペース内の書き込みのみ (workspace-write)"
+    : "安全 — ファイル編集のみ自動許可 (acceptEdits)";
 }
 $("#dispatchTarget").addEventListener("change", () => {
   try { localStorage.setItem(DISPATCH_TARGET_KEY, $("#dispatchTarget").value); } catch {}
@@ -1223,25 +1664,35 @@ function syncDispatchCwd() {
   if (!t) return;
   const resume = $("#dispatchSession").value === "resume";
   $("#dispatchCwd").value =
+    (resume && dispatchResumeSession?.cwd) ||
     (resume && t.origin_path) || dispatchProjectPath || t.origin_path || "";
 }
 
-async function openDispatchDialog(t) {
+async function openDispatchDialog(t, { resumeSession = null } = {}) {
   dispatchTarget = t;
   dispatchProjectPath = "";
+  dispatchResumeSession = resumeSession;
   $("#dispatchTaskTitle").textContent = `#${t.id} 「${t.title}」 — ${t.project}`;
   let savedTarget = "desktop";
   try { savedTarget = localStorage.getItem(DISPATCH_TARGET_KEY) || "desktop"; } catch {}
-  $("#dispatchTarget").value = savedTarget;
+  $("#dispatchTarget").value = resumeSession ? "headless" : savedTarget;
   if (!$("#dispatchTarget").value) $("#dispatchTarget").value = "desktop";
+  // 他の AI セッションが作業中なら知らせる（二重に走らせないため）
+  const busy = (t.sessions || []).filter((s) => s.active && s !== resumeSession);
+  if (busy.length) {
+    showToast(`このタスクは ${busy.map((s) => AGENT_LABEL[s.agent] || s.agent).join("・")} のセッションで作業中です`);
+  }
   // 権限モードは記憶しない。全自動は毎回選び直す (前回の選択が残らないようにする)
   $("#dispatchMode").value = "safe";
   // MCP 経由 (AI が登録) のタスクはプロンプトインジェクションの入口になりうるので注意を出す
   $("#dispatchOriginWarn").hidden = !t.session;
   syncDispatchTargetUI();
   const sessionSel = $("#dispatchSession");
-  const canResume = isClaudeSession(t.session);
+  const canResume = isClaudeSession(t.session) || !!resumeSession;
   sessionSel.querySelector('option[value="resume"]').disabled = !canResume;
+  sessionSel.querySelector('option[value="resume"]').textContent = resumeSession
+    ? `選んだセッションの続きで実行（${resumeSession.title || resumeSession.session_id}）`
+    : "登録元セッションの続きで実行（文脈を引き継ぐ）";
   // 登録元セッションがあるタスクは「続きで実行」をデフォルトに
   sessionSel.value = canResume ? "resume" : "new";
   syncDispatchCwd();
@@ -1265,20 +1716,22 @@ $("#dispatchForm").addEventListener("submit", async () => {
   const mode = $("#dispatchMode").value;
   const target = $("#dispatchTarget").value;
   const resume = target === "headless" && $("#dispatchSession").value === "resume";
-  if (target === "headless" && mode === "full") {
+  const resumeSession = resume && dispatchResumeSession ? dispatchResumeSession.session_id : undefined;
+  dispatchResumeSession = null;
+  if ((target === "headless" || target === "codex") && mode === "full") {
     // --dangerously-skip-permissions はタスク本文に紛れ込んだ指示もそのまま実行しうるので毎回確認する
     const ok = confirm(
       `全自動モードで実行します。\n\n#${t.id} 「${t.title}」\n作業ディレクトリ: ${cwd}\n\n` +
-      "claude はすべてのコマンドを確認なしで実行します。タスクのタイトルとメモに" +
+      `${target === "codex" ? "codex" : "claude"} はすべてのコマンドを確認なしで実行します。タスクのタイトルとメモに` +
       "（AI や他人が書いた文も含めて）意図しない指示が入っていないか確認しましたか？"
     );
     if (!ok) return;
   }
   try {
     await api(`/api/tasks/${t.id}/dispatch`, {
-      method: "POST", body: JSON.stringify({ cwd, mode, resume, target }),
+      method: "POST", body: JSON.stringify({ cwd, mode, resume, target, resume_session: resumeSession }),
     });
-    if (target !== "headless") {
+    if (target === "desktop" || target === "cowork") {
       showToast("デスクトップアプリでセッションを開きました — 内容を確認して送信");
     }
   } catch (err) {
@@ -1327,9 +1780,122 @@ function syncPanel() {
   set($("#propStatus"), t.status);
   set($("#propPriority"), t.priority || "");
   set($("#propProject"), t.project);
+  // Notion のタスク: グループは Notion のプロパティで決まるので編集不可、削除も Notion 側で
+  const isNotion = !!t.notion_page_id;
+  $("#propProject").disabled = isNotion;
+  $("#panelDelete").hidden = isNotion;
+  $("#propNotionLabel").hidden = !isNotion;
+  const notionCell = $("#propNotion");
+  notionCell.hidden = !isNotion;
+  notionCell.replaceChildren();
+  if (isNotion) {
+    const a = el("a", "panel-link", `${t.external_status || "ステータスなし"} — Notion で開く`);
+    a.href = t.notion_url;
+    a.target = "_blank";
+    a.rel = "noopener";
+    notionCell.appendChild(a);
+  }
+  $("#notesHead").textContent = isNotion ? "メモ（taskdeck 内だけ・Notion には送られません）" : "メモ";
+  renderNotionProps(t);
+  renderSessions(t);
   syncPanelDispatch(t);
   if (ae !== notesEditor && !notesDirty) setEditorNotes(t.notes, t.id);
 }
+
+function renderNotionProps(t) {
+  const isNotion = !!t.notion_page_id;
+  const list = $("#notionPropsList");
+  list.replaceChildren();
+  const shown = isNotion ? displayPropsFor(t).filter((p) => p.text) : [];
+  $("#notionPropsBlock").hidden = !isNotion;
+  for (const p of shown) {
+    list.appendChild(el("span", "k", p.name));
+    list.appendChild(propValueEl(p));
+  }
+  if (isNotion && !shown.length) {
+    list.appendChild(el("span", "k", taskProps(t).length ? "表示するプロパティがありません" : "次の同期で読み込みます"));
+  }
+  const body = $("#notionBody");
+  $("#notionBodyBlock").hidden = !(isNotion && t.notion_body);
+  // 本文はエスケープしてから整形（mdRender）するので HTML は注入されない
+  if (isNotion && t.notion_body) body.innerHTML = mdRender(t.notion_body);
+}
+
+// ---- 表示するプロパティの編集 ----
+const propsDialog = $("#propsDialog");
+let propsEditing = null; // { sourceId, rows: [{name, type, show, card}] }
+function renderPropRows() {
+  const box = $("#propRows");
+  box.replaceChildren();
+  propsEditing.rows.forEach((r, i) => {
+    const row = el("div", "prop-row" + (r.show ? " on" : ""));
+    const name = el("span", "name", r.name);
+    name.appendChild(el("small", "", r.type));
+    row.appendChild(name);
+    const mk = (label, key) => {
+      const l = el("label");
+      const cb = document.createElement("input");
+      cb.type = "checkbox";
+      cb.checked = r[key];
+      cb.onchange = () => {
+        r[key] = cb.checked;
+        if (key === "card" && cb.checked) r.show = true;
+        if (key === "show" && !cb.checked) r.card = false;
+        renderPropRows();
+      };
+      l.append(cb, label);
+      return l;
+    };
+    row.appendChild(mk("表示", "show"));
+    row.appendChild(mk("カード", "card"));
+    const move = el("span", "move");
+    for (const [d, label] of [[-1, "↑"], [1, "↓"]]) {
+      const b = el("button", "icon-btn", label);
+      b.type = "button";
+      b.title = d < 0 ? "上へ" : "下へ";
+      b.disabled = i + d < 0 || i + d >= propsEditing.rows.length;
+      b.onclick = () => {
+        const rows = propsEditing.rows;
+        [rows[i], rows[i + d]] = [rows[i + d], rows[i]];
+        renderPropRows();
+      };
+      move.appendChild(b);
+    }
+    row.appendChild(move);
+    box.appendChild(row);
+  });
+}
+$("#editPropsBtn").onclick = () => {
+  const t = panelTask();
+  if (!t?.notion_page_id) return;
+  const shown = displayPropsFor(t);
+  const shownNames = new Set(shown.map((p) => p.name));
+  const all = taskProps(t);
+  propsEditing = {
+    sourceId: t.notion_source_id,
+    rows: [
+      ...shown.map((p) => ({ name: p.name, type: p.type, show: true, card: !!p.card })),
+      ...all.filter((p) => !shownNames.has(p.name)).map((p) => ({ name: p.name, type: p.type, show: false, card: false })),
+    ],
+  };
+  const src = state.notionSources?.[t.notion_source_id];
+  $("#propsDialogSub").textContent = `「${src?.title || "Notion"}」のすべてのタスクに適用されます。`;
+  renderPropRows();
+  propsDialog.showModal();
+};
+$("#propsCancel").onclick = () => propsDialog.close();
+async function saveDisplayProps(list) {
+  try {
+    await api(`/api/notion/sources/${propsEditing.sourceId}`, { method: "PATCH", body: JSON.stringify({ display_props: list }) });
+    propsDialog.close();
+    refresh();
+  } catch (err) {
+    showToast("保存できませんでした — " + err.message);
+  }
+}
+$("#propsSave").onclick = () =>
+  saveDisplayProps(propsEditing.rows.filter((r) => r.show).map((r) => ({ name: r.name, card: r.card })));
+$("#propsReset").onclick = () => saveDisplayProps(null);
 
 function syncPanelDispatch(t) {
   const btn = $("#panelDispatch");
@@ -1337,13 +1903,13 @@ function syncPanelDispatch(t) {
   if (run?.status === "running") {
     btn.hidden = false;
     btn.replaceChildren(icon("stop"), "停止");
-    btn.title = "Claudeの実行を停止";
+    btn.title = "AI の実行を停止";
   } else if (t.status === "done") {
     btn.hidden = true;
   } else {
     btn.hidden = false;
-    btn.replaceChildren(icon("agent"), "Claude に依頼");
-    btn.title = "Claude Codeに依頼";
+    btn.replaceChildren(icon("agent"), "AI に依頼");
+    btn.title = "Claude / Codex に依頼";
   }
 }
 
@@ -1738,12 +2304,291 @@ document.addEventListener("mousedown", (e) => {
   if (!linkPopup.hidden && !e.target.closest("#linkPopup")) closeLinkPopup();
 });
 
+// ---- Notion 連携 ----
+// 失敗した書き込み（Notion への書き戻しなど）は握りつぶさずトーストで知らせる
+window.addEventListener("unhandledrejection", (e) => {
+  showToast("操作に失敗しました — " + (e.reason?.message || e.reason));
+  refresh();
+});
+
+const notionDialog = $("#notionDialog");
+let notionInfo = null;
+let pendingSourceEdit = null; // 「設定を変更」で読み込み直すときの元の設定
+
+function applySourceEdit() {
+  const src = pendingSourceEdit;
+  pendingSourceEdit = null;
+  if (!src) return;
+  $("#notionPeopleProp").value = src.people_prop;
+  if (notionInfo.people.some((p) => p.id === src.person_id && p.named)) $("#notionPerson").value = src.person_id;
+  else { $("#notionPerson").value = ME_DIRECT; $("#notionMeId").value = src.person_id; }
+  $("#notionStatusProp").value = src.status_prop || "";
+  $("#notionProjectProp").value = src.project_prop || "";
+  syncWritebackUI();
+  for (const [col, id] of [["todo", "#notionWbTodo"], ["doing", "#notionWbDoing"], ["done", "#notionWbDone"]]) {
+    if (src.writeback?.[col]) $(id).value = src.writeback[col];
+  }
+}
+
+function fillSelect(sel, items, { empty } = {}) {
+  sel.replaceChildren();
+  if (empty !== undefined) sel.add(new Option(empty, ""));
+  for (const it of items) {
+    const [value, label] = Array.isArray(it) ? it : [it, it];
+    sel.add(new Option(label, value));
+  }
+}
+
+async function loadNotionState() {
+  const st = await api("/api/notion");
+  $("#notionTokenSection").hidden = st.configured;
+  $("#notionSourcesSection").hidden = !st.configured;
+  $("#notionAddSection").hidden = !st.configured;
+  const list = $("#notionSources");
+  list.replaceChildren();
+  if (!st.sources.length) list.appendChild(el("div", "sub", "まだありません。下にデータベースのリンクを貼ってください。"));
+  for (const src of st.sources) {
+    const row = el("div", "source-row");
+    const info = el("div", "grow");
+    const name = el("a", "", src.title || "Notion");
+    name.href = src.url || "#";
+    name.target = "_blank";
+    name.rel = "noopener";
+    info.appendChild(name);
+    info.appendChild(el("div", "sub",
+      `${src.people_prop} = ${!src.person_name || /^[0-9a-f-]{32,36}$/i.test(src.person_name) ? "あなた" : src.person_name}` +
+      (src.status_prop ? ` · ステータス: ${src.status_prop}` : "") +
+      (src.project_prop ? ` · グループ: ${src.project_prop}` : "") +
+      ` · ${src.last_synced_at ? `${timeAgo(src.last_synced_at)}に同期` : "未同期"}`));
+    if (src.last_error) info.appendChild(el("div", "err", src.last_error));
+    row.appendChild(info);
+    const edit = el("button", "icon-btn", "設定を変更");
+    edit.type = "button";
+    edit.title = "担当者・ステータスなどの設定をやり直す";
+    edit.onclick = () => {
+      pendingSourceEdit = src;
+      $("#notionUrl").value = src.url || src.database_id;
+      $("#notionInspect").click();
+    };
+    row.appendChild(edit);
+    const del = el("button", "icon-btn del", "解除");
+    del.type = "button";
+    del.title = "同期をやめてボードから外す（Notion のページはそのまま）";
+    del.onclick = async () => {
+      if (!confirm(`「${src.title}」の同期をやめて、ボードからこのデータベースのタスクを外しますか？\nNotion のページは消えません。`)) return;
+      await api(`/api/notion/sources/${src.id}`, { method: "DELETE" });
+      await loadNotionState();
+      refresh();
+    };
+    row.appendChild(del);
+    list.appendChild(row);
+  }
+  return st;
+}
+
+function syncWritebackUI() {
+  const prop = $("#notionStatusProp").value;
+  const def = notionInfo?.status_defs?.[prop];
+  $("#notionWritebackRow").hidden = !def || def.type === "checkbox";
+  if (!def) return;
+  for (const [col, id, mapId] of [["todo", "#notionWbTodo", "#notionMapTodo"], ["doing", "#notionWbDoing", "#notionMapDoing"], ["done", "#notionWbDone", "#notionMapDone"]]) {
+    fillSelect($(id), def.options);
+    $(id).value = def.writeback[col] || def.options[0] || "";
+    // Notion のどのステータスがこの列に並ぶか
+    const from = def.options.filter((o) => def.status_map[o] === col);
+    $(mapId).textContent = from.length ? from.join("、") : "（該当なし）";
+  }
+}
+
+const ME_KEY = "taskdeck.notionMeId";
+const ME_DIRECT = "__direct__";
+function savedMeId() {
+  try { return localStorage.getItem(ME_KEY) || localStorage.getItem("taskdeck.notionPerson") || ""; } catch { return ""; }
+}
+function selectedPersonId() {
+  const v = $("#notionPerson").value;
+  return v === ME_DIRECT ? $("#notionMeId").value.trim() : v;
+}
+function syncMeRow() {
+  $("#notionMeRow").hidden = $("#notionPerson").value !== ME_DIRECT;
+}
+
+function personLabel(p) {
+  const name = p.named ? p.name : `名前なし（ID ${p.id.slice(0, 8)}…）`;
+  return `${name}${p.count ? ` — 担当 ${p.count} 件` : ""}`;
+}
+
+let previewSeq = 0;
+async function updateNotionPreview() {
+  const box = $("#notionPreview");
+  if (!notionInfo) { box.textContent = ""; return; }
+  const seq = ++previewSeq;
+  const pid = selectedPersonId();
+  const person = notionInfo.people.find((p) => p.id === pid) || (pid ? { id: pid, named: false } : null);
+  if (!person) { box.textContent = "「あなた」を選ぶか ID を入れると、取り込まれる件数を確認できます。"; return; }
+  box.textContent = "取り込まれるタスクを確認中…";
+  try {
+    const r = await api("/api/notion/preview", {
+      method: "POST",
+      body: JSON.stringify({
+        url: $("#notionUrl").value,
+        people_prop: $("#notionPeopleProp").value,
+        person_id: person.id,
+        status_prop: $("#notionStatusProp").value,
+      }),
+    });
+    if (seq !== previewSeq) return;
+    box.replaceChildren();
+    const who = person.named ? `${person.name} さん` : "選んだ人";
+    const head = el("div", "", r.total
+      ? `「${$("#notionPeopleProp").value}」に${who}が入っているタスクが ${r.total}${r.has_more ? " 件以上" : " 件"}あります（Todo ${r.by_column.todo}・Doing ${r.by_column.doing}・Done ${r.by_column.done}）。`
+      : `「${$("#notionPeopleProp").value}」に${who}が入っているタスクはありません。担当者のプロパティか「あなた」の選択を確認してください。`);
+    box.appendChild(head);
+    for (const smp of r.samples) box.appendChild(el("div", "sample", `・${smp.title}${smp.status ? `（${smp.status}）` : ""}`));
+    if (r.by_column.done) box.appendChild(el("div", "sample", "完了したタスクは、直近 14 日に更新されたものだけボードに出ます。"));
+  } catch (err) {
+    if (seq === previewSeq) box.textContent = "件数を確認できませんでした — " + err.message;
+  }
+}
+
+function resetNotionAdd() {
+  notionInfo = null;
+  $("#notionConfig").hidden = true;
+  $("#notionAdd").hidden = true;
+  $("#notionUrl").value = "";
+}
+
+$("#notionBtn").onclick = async () => {
+  resetNotionAdd();
+  $("#notionToken").value = "";
+  try { await loadNotionState(); } catch (err) { showToast(err.message); }
+  notionDialog.showModal();
+};
+$("#notionClose").onclick = () => notionDialog.close();
+$("#notionTokenChange").onclick = () => {
+  $("#notionTokenSection").hidden = false;
+  $("#notionToken").focus();
+};
+$("#notionTokenSave").onclick = async () => {
+  const btn = $("#notionTokenSave");
+  btn.disabled = true;
+  try {
+    const r = await api("/api/notion/token", { method: "POST", body: JSON.stringify({ token: $("#notionToken").value }) });
+    $("#notionToken").value = "";
+    showToast(`Notion に接続しました${r.bot ? `（${r.bot}）` : ""}`);
+    await loadNotionState();
+    $("#notionUrl").focus();
+  } catch (err) {
+    showToast("トークンを保存できませんでした — " + err.message);
+  } finally {
+    btn.disabled = false;
+  }
+};
+$("#notionInspect").onclick = async () => {
+  const btn = $("#notionInspect");
+  btn.disabled = true;
+  try {
+    notionInfo = await api("/api/notion/inspect", { method: "POST", body: JSON.stringify({ url: $("#notionUrl").value }) });
+    const i = notionInfo;
+    if (!i.people_props.length) throw new Error("このデータベースには「ユーザー（people）」型のプロパティがありません");
+    $("#notionDbTitle").textContent = `データベース「${i.title}」を読み込みました。カードのタイトルには「${i.title_prop}」を使います。`;
+    fillSelect($("#notionPeopleProp"), i.people_props);
+    $("#notionPeopleProp").value = i.suggested.people_prop;
+    fillSelect($("#notionPerson"), [...i.people.map((p) => [p.id, personLabel(p)]), [ME_DIRECT, "ID を直接入力する…"]], { empty: "選んでください" });
+    $("#notionPeopleHint").textContent = i.people_named
+      ? "あなた自身を選んでください。担当者にあなたが入っている行だけがボードに出ます。"
+      : "インテグレーションに「ユーザー情報」の権限が無いため、Notion は名前を返しません（権限はオフのままで大丈夫です）。「ID を直接入力する…」を選び、あなたの Notion ユーザー ID を入れてください。一度入れればこの Mac に記憶します。";
+    // 前回の「あなた」を初期値にする（このブラウザだけの記憶）。一覧に名前付きで居ればそれを、
+    // 居なければ直接入力欄に入れる
+    const last = savedMeId();
+    if (last && i.people.some((p) => p.id === last && p.named)) $("#notionPerson").value = last;
+    else if (last || !i.people_named) {
+      $("#notionPerson").value = ME_DIRECT;
+      $("#notionMeId").value = last;
+    }
+    if (pendingSourceEdit) applySourceEdit();
+    syncMeRow();
+    fillSelect($("#notionStatusProp"), i.status_props, { empty: "使わない（すべて Todo に置く）" });
+    $("#notionStatusProp").value = i.suggested.status_prop;
+    fillSelect($("#notionProjectProp"), i.project_props.map((n) => [n, `「${n}」の値ごとに分ける`]), { empty: `ひとつにまとめる（${i.title}）` });
+    $("#notionProjectProp").value = i.suggested.project_prop;
+    syncWritebackUI();
+    $("#notionConfig").hidden = false;
+    $("#notionAdd").hidden = false;
+    updateNotionPreview();
+  } catch (err) {
+    showToast(err.message);
+  } finally {
+    btn.disabled = false;
+  }
+};
+$("#notionUrl").addEventListener("keydown", (e) => {
+  if (e.key === "Enter") { e.preventDefault(); $("#notionInspect").click(); }
+});
+$("#notionStatusProp").addEventListener("change", () => { syncWritebackUI(); updateNotionPreview(); });
+$("#notionPerson").addEventListener("change", () => {
+  syncMeRow();
+  if ($("#notionPerson").value === ME_DIRECT) $("#notionMeId").focus();
+  updateNotionPreview();
+});
+let meIdTimer = null;
+$("#notionMeId").addEventListener("input", () => {
+  clearTimeout(meIdTimer);
+  meIdTimer = setTimeout(updateNotionPreview, 400);
+});
+$("#notionPeopleProp").addEventListener("change", updateNotionPreview);
+$("#notionAdd").onclick = async () => {
+  if (!notionInfo) return;
+  if (!selectedPersonId()) { showToast("「あなた」を選ぶか、Notion のユーザー ID を入れてください"); return; }
+  const btn = $("#notionAdd");
+  btn.disabled = true;
+  try {
+    const personId = selectedPersonId();
+    const person = notionInfo.people.find((p) => p.id === personId);
+    try { localStorage.setItem(ME_KEY, personId); } catch {}
+    const r = await api("/api/notion/sources", {
+      method: "POST",
+      body: JSON.stringify({
+        url: $("#notionUrl").value,
+        people_prop: $("#notionPeopleProp").value,
+        person_id: personId,
+        person_name: person?.named ? person.name : "あなた",
+        status_prop: $("#notionStatusProp").value,
+        project_prop: $("#notionProjectProp").value,
+        writeback: { todo: $("#notionWbTodo").value, doing: $("#notionWbDoing").value, done: $("#notionWbDone").value },
+      }),
+    });
+    showToast(`「${r.source.title}」から ${r.fetched} 件を同期しました`);
+    resetNotionAdd();
+    await loadNotionState();
+    refresh();
+  } catch (err) {
+    showToast("追加できませんでした — " + err.message);
+  } finally {
+    btn.disabled = false;
+  }
+};
+$("#notionSyncNow").onclick = async () => {
+  const btn = $("#notionSyncNow");
+  btn.disabled = true;
+  try {
+    await api("/api/notion/sync", { method: "POST", body: "{}" });
+    await loadNotionState();
+    refresh();
+  } catch (err) {
+    showToast("同期できませんでした — " + err.message);
+  } finally {
+    btn.disabled = false;
+  }
+};
+
 // ---- … メニュー ----
 const cardMenu = $("#cardMenu");
 let menuTask = null;
 function openMenu(anchor, t) {
   menuTask = t;
   $("#menuDone").style.display = t.status === "done" ? "none" : "";
+  $("#menuDelete").style.display = t.notion_page_id ? "none" : "";
   cardMenu.hidden = false;
   const r = anchor.getBoundingClientRect();
   const mw = cardMenu.offsetWidth;

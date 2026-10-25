@@ -1,10 +1,25 @@
-// Claude Code へのヘッドレス dispatch。
-// タスクをプロンプト化して `claude -p` を spawn し、結果をタスクのメモに書き戻す。
+// Claude Code / Codex へのヘッドレス dispatch。
+// タスクをプロンプト化して `claude -p` か `codex exec` を spawn し、結果をタスクのメモに書き戻す。
 import { execFile, spawn } from "node:child_process";
-import { existsSync, readFileSync, statSync, writeFileSync } from "node:fs";
-import { homedir } from "node:os";
+import { existsSync, readFileSync, rmSync, statSync, writeFileSync } from "node:fs";
+import { homedir, tmpdir } from "node:os";
 import { delimiter, dirname, join, normalize } from "node:path";
-import { getTask, updateTask } from "./db.js";
+import { getTask, recordTaskSession, updateTask } from "./db.js";
+import { fetchPageText, updateTaskSynced } from "./notion.js";
+import { claudeTranscriptPath, codexTranscriptPath } from "./sessions.js";
+
+export const AGENT_LABEL = { claude: "Claude", codex: "Codex" };
+
+// 着手したタスクを doing にする。Notion ミラーなら Notion にも書き戻すが、
+// Notion 側の失敗で実行そのものは止めない
+async function markDoing(id) {
+  try {
+    await updateTaskSynced(id, { status: "doing" });
+  } catch (err) {
+    console.error(`Notion への書き戻しに失敗 (#${id}): ${err.message}`);
+    updateTask(id, { status: "doing" });
+  }
+}
 
 const IS_WIN = process.platform === "win32";
 const dataDir = process.env.TASKDECK_DIR || join(homedir(), ".taskdeck");
@@ -27,6 +42,15 @@ export function saveProjectPath(project, path) {
   const paths = loadProjectPaths();
   if (paths[project] === path) return;
   paths[project] = path;
+  writeFileSync(pathsFile, JSON.stringify(paths, null, 2) + "\n");
+}
+
+// グループ名の変更に合わせて作業ディレクトリの紐付けも付け替える
+export function renameProjectPath(from, to) {
+  const paths = loadProjectPaths();
+  if (!paths[from] || paths[to]) return;
+  paths[to] = paths[from];
+  delete paths[from];
   writeFileSync(pathsFile, JSON.stringify(paths, null, 2) + "\n");
 }
 
@@ -119,10 +143,10 @@ function windowsClaudeCandidates() {
 
 // POSIX: .app 起動などPATHが素の環境向け: ログインシェル(-lc)、だめなら
 // PATH設定が .zshrc にある場合に備えて対話シェル(-lic)でも探す
-async function findClaudeViaLoginShell() {
+async function findClaudeViaLoginShell(name = "claude") {
   for (const flag of ["-lc", "-lic"]) {
     const found = await new Promise((resolve) => {
-      execFile("/bin/zsh", [flag, "command -v claude"], { timeout: 8000 }, (err, stdout) =>
+      execFile("/bin/zsh", [flag, `command -v ${name}`], { timeout: 8000 }, (err, stdout) =>
         resolve(err ? "" : stdout.trim().split("\n").pop())
       );
     });
@@ -162,6 +186,39 @@ async function resolveClaude() {
   );
 }
 
+// ---- codex CLI の場所を解決 ----
+// Codex は ChatGPT デスクトップアプリに同梱されていて PATH に無いことが多い
+
+let codexBin = null;
+
+function codexCandidates() {
+  if (IS_WIN) {
+    const appData = process.env.APPDATA || join(homedir(), "AppData", "Roaming");
+    return [join(dirname(process.execPath), "codex.cmd"), join(appData, "npm", "codex.cmd")];
+  }
+  return [
+    "/Applications/ChatGPT.app/Contents/Resources/codex-cli/bin/codex",
+    "/Applications/Codex.app/Contents/Resources/codex",
+    join(dirname(process.execPath), "codex"),
+    "/opt/homebrew/bin/codex",
+    "/usr/local/bin/codex",
+    join(homedir(), ".local", "bin", "codex"),
+  ];
+}
+
+async function resolveCodex() {
+  if (codexBin) return codexBin;
+  if (process.env.TASKDECK_CODEX) return (codexBin = process.env.TASKDECK_CODEX);
+  for (const c of codexCandidates()) {
+    if (existsSync(c)) return (codexBin = c);
+  }
+  if (!IS_WIN) {
+    const found = await findClaudeViaLoginShell("codex");
+    if (found) return (codexBin = found);
+  }
+  throw new Error("codex CLI が見つかりません。環境変数 TASKDECK_CODEX にパスを設定してください");
+}
+
 // claude を spawn するときの実行ファイルと引数を決める。
 // Windows の npm -g 版 claude は `claude.cmd` (batch ラッパ) で、Node 22 は
 // .cmd/.bat を shell なしで spawn できない (CVE-2024-27980 対策で EINVAL)。
@@ -174,6 +231,15 @@ function claudeSpawnSpec(bin, args) {
   if (existsSync(cliJs)) return { file: process.execPath, args: [cliJs, ...args], shell: false };
   // cmd.exe 経由: 空白を含む引数(主にパス)を二重引用符で囲む。
   // claude の引数自体に空白や特殊文字は含まれない前提
+  const q = (s) => (/\s/.test(s) ? `"${s}"` : s);
+  return { file: q(bin), args: args.map(q), shell: true };
+}
+
+// codex.cmd (npm -g 版) は shell なしで spawn できないので cmd.exe 経由にする。
+// 引数は固定の文字列と一時ファイルのパスだけだが、念のため cmd.exe のメタ文字を含むものは拒否する
+function codexSpawnSpec(bin, args) {
+  if (!IS_WIN || !/\.(cmd|bat)$/i.test(bin)) return { file: bin, args, shell: false };
+  if (args.some((a) => /[&|<>^%!"]/.test(a))) throw new Error("codex に渡す引数に使えない文字が含まれています");
   const q = (s) => (/\s/.test(s) ? `"${s}"` : s);
   return { file: q(bin), args: args.map(q), shell: true };
 }
@@ -211,10 +277,11 @@ function neutralizeFence(s) {
   return String(s ?? "").replace(FENCE_RE, "");
 }
 
-export function buildPrompt(task, { resume = false } = {}) {
+export function buildPrompt(task, { resume = false, notionText = "" } = {}) {
   const notes = neutralizeFence(notesToText(task.notes));
   const title = neutralizeFence(task.title);
   const project = neutralizeFence(task.project);
+  const page = neutralizeFence(notionText);
   const lead = resume
     ? `このセッションで扱っていた taskdeck のタスクの続きを任されました。これまでの文脈を踏まえて、以下のタスクを完了してください。`
     : `taskdeck のカンバンボードからタスクを任されました。以下のタスクを完了してください。`;
@@ -230,10 +297,10 @@ ${TASK_FENCE_OPEN}
 - taskdeck ID: ${task.id}
 - プロジェクト: ${project}
 - タイトル: ${title}
-${notes ? `\n## メモ\n${notes}\n` : ""}${TASK_FENCE_CLOSE}
+${task.notion_url ? `- Notion: ${task.notion_url}${task.external_status ? ` (ステータス: ${neutralizeFence(task.external_status)})` : ""}\n` : ""}${page ? `\n## Notion ページ本文\n${page}\n` : ""}${notes ? `\n## メモ\n${notes}\n` : ""}${TASK_FENCE_CLOSE}
 
 # 進め方
-- taskdeck MCP が使える場合: 着手時に task_update で id=${task.id} の status を "doing" に、完了したら task_done で完了にすること。使えない環境なら状態更新は不要。
+- taskdeck MCP が使える場合: 着手時に task_start で id=${task.id} に着手を知らせ、完了したら task_done で完了にすること (Notion のタスクなら Notion のステータスも自動で更新される)。使えない環境なら状態更新は不要。
 - 質問はできない環境なので、判断に迷う点は安全側に倒して進められる範囲で完了させること。
 - 最後に「何をしたか」の簡潔なサマリ(数行)を出力して終了すること。
 `;
@@ -244,7 +311,7 @@ ${notes ? `\n## メモ\n${notes}\n` : ""}${TASK_FENCE_CLOSE}
 // アプリ側の認証を使うため CLI のログイン状態に依存しない。
 // (q はアプリ側で新規セッション画面にプリフィルされる)
 
-export function dispatchToDesktop(id, { cwd, app = "code" } = {}) {
+export async function dispatchToDesktop(id, { cwd, app = "code" } = {}) {
   const task = getTask(id);
   if (!task) throw new Error(`task ${id} not found`);
   if (!cwd) throw new Error("作業ディレクトリが未指定です");
@@ -253,7 +320,7 @@ export function dispatchToDesktop(id, { cwd, app = "code" } = {}) {
     throw new Error(`作業ディレクトリが存在しません: ${cwd}`);
   }
   const host = app === "cowork" ? "cowork" : "code";
-  const full = buildPrompt(task);
+  const full = buildPrompt(task, { notionText: await notionTextFor(task) });
   // Windows は ShellExecute → ハンドラのコマンドライン (上限 32767 文字) に URL が
   // そのまま載るため、日本語(1文字 9 バイトに膨らむ)を含むプロンプトは短めに切り詰める
   const MAX_URL = IS_WIN ? 30000 : Infinity;
@@ -266,8 +333,19 @@ export function dispatchToDesktop(id, { cwd, app = "code" } = {}) {
     promptLen -= 500;
   } while (url.length > MAX_URL && promptLen > 0);
   openExternal(url);
-  updateTask(id, { status: "doing" });
+  // デスクトップ側のセッションは、プロンプト中の「taskdeck ID」を会話ログのスキャンが見つけて紐付ける
+  await markDoing(id);
   return { taskId: id, target: host, cwd };
+}
+
+async function notionTextFor(task) {
+  if (!task.notion_page_id) return "";
+  try {
+    return await fetchPageText(task.notion_page_id);
+  } catch (err) {
+    console.error(`Notion ページ本文を取得できませんでした (#${task.id}): ${err.message}`);
+    return "";
+  }
 }
 
 // URL を OS の既定ハンドラ (claude:// なら Claude デスクトップアプリ) で開く。
@@ -349,6 +427,7 @@ function appendRunLog(run) {
   if (!task) return;
   const when = new Date().toLocaleString("ja-JP");
   const icon = run.status === "done" ? "✅" : run.status === "stopped" ? "⏹" : "⚠️";
+  const label = `${AGENT_LABEL[run.agent] || "Claude"}実行ログ`;
   const body =
     run.status === "done"
       ? run.resultText || "(出力なし)"
@@ -356,7 +435,7 @@ function appendRunLog(run) {
   let notes = task.notes || "";
   if (!notes || /^\s*</.test(notes)) {
     const html =
-      `<h3>${icon} Claude実行ログ (${escapeHtml(when)})</h3>` +
+      `<h3>${icon} ${label} (${escapeHtml(when)})</h3>` +
       body
         .split("\n")
         .filter((l) => l.trim())
@@ -364,7 +443,7 @@ function appendRunLog(run) {
         .join("");
     notes = notes + html;
   } else {
-    notes = `${notes}\n\n### ${icon} Claude実行ログ (${when})\n${body}`;
+    notes = `${notes}\n\n### ${icon} ${label} (${when})\n${body}`;
   }
   updateTask(run.taskId, { notes });
 }
@@ -372,6 +451,14 @@ function appendRunLog(run) {
 function finishRun(run, error, onChange) {
   if (run.status !== "running") return;
   clearTimeout(run.timer);
+  if (run.outFile) {
+    // codex は -o で最後のメッセージをファイルに書く
+    try {
+      const last = readFileSync(run.outFile, "utf8").trim();
+      if (last) run.resultText = last.slice(0, 8000);
+    } catch {}
+    try { rmSync(run.outFile, { force: true }); } catch {}
+  }
   run.endedAt = new Date().toISOString();
   run.error = error || "";
   run.status = error ? (run.stopRequested ? "stopped" : "error") : "done";
@@ -388,27 +475,44 @@ function finishRun(run, error, onChange) {
 
 export async function dispatchTask(
   id,
-  { cwd, mode = "safe", resumeSession = null } = {},
+  { cwd, mode = "safe", resumeSession = null, agent = "claude" } = {},
   onChange = () => {}
 ) {
   const task = getTask(id);
   if (!task) throw new Error(`task ${id} not found`);
-  if (runs.get(id)?.status === "running") throw new Error("このタスクは既にClaudeが実行中です");
+  if (!AGENT_LABEL[agent]) throw new Error(`unknown agent: ${agent}`);
+  if (runs.get(id)?.status === "running") throw new Error(`このタスクは既に${AGENT_LABEL[runs.get(id).agent]}が実行中です`);
   if (!cwd) throw new Error("作業ディレクトリが未指定です");
   cwd = expandHome(cwd.trim());
   if (!existsSync(cwd) || !statSync(cwd).isDirectory()) {
     throw new Error(`作業ディレクトリが存在しません: ${cwd}`);
   }
-  const bin = await resolveClaude();
+  if (agent === "codex" && resumeSession) throw new Error("Codex は登録元セッションの続きでは実行できません");
+  const bin = agent === "codex" ? await resolveCodex() : await resolveClaude();
 
-  const args = ["-p", "--output-format", "stream-json", "--verbose"];
-  if (resumeSession) args.push("--resume", resumeSession);
-  if (mode === "full") args.push("--dangerously-skip-permissions");
-  else args.push("--permission-mode", "acceptEdits");
+  let args;
+  let outFile = null;
+  if (agent === "codex") {
+    outFile = join(tmpdir(), `taskdeck-codex-${id}-${Date.now()}.txt`);
+    // 作業ディレクトリは -C ではなく spawn の cwd で渡す。Windows の codex.cmd は cmd.exe 経由になるため、
+    // 利用者が入力したパスを引数に載せない (cmd.exe のメタ文字で別コマンドを実行されうる)
+    args = ["exec", "--json", "--skip-git-repo-check", "-o", outFile];
+    if (mode === "full") args.push("--dangerously-bypass-approvals-and-sandbox");
+    else args.push("-s", "workspace-write");
+    args.push("-");
+  } else {
+    args = ["-p", "--output-format", "stream-json", "--verbose"];
+    if (resumeSession) args.push("--resume", resumeSession);
+    if (mode === "full") args.push("--dangerously-skip-permissions");
+    else args.push("--permission-mode", "acceptEdits");
+  }
 
   const session = `deck-${id}-${Date.now()}`;
   const run = {
     taskId: id,
+    agent,
+    agentSession: null,
+    outFile,
     session,
     resumeSession,
     status: "running",
@@ -422,8 +526,9 @@ export async function dispatchTask(
     stopRequested: false,
   };
   runs.set(id, run);
+  const notionText = await notionTextFor(task);
   // session カラムは「登録元セッションID」を保持したいので上書きしない
-  updateTask(id, { status: "doing" });
+  await markDoing(id);
 
   // detached (POSIX): 自前のプロセスグループにして、停止時にグループごと kill できるようにする。
   // Windows では detached だと新しいコンソールが付くだけで利点が無く、停止は taskkill /T で行う。
@@ -431,7 +536,7 @@ export async function dispatchTask(
   // claude 本体が `#!/usr/bin/env node` で node を探すのにも必要)。
   // Windows の環境変数名は大文字小文字を区別しないため、既存のキー (Path など) をそのまま使う
   const pathKey = Object.keys(process.env).find((k) => k.toUpperCase() === "PATH") || "PATH";
-  const spec = claudeSpawnSpec(bin, args);
+  const spec = agent === "claude" ? claudeSpawnSpec(bin, args) : codexSpawnSpec(bin, args);
   const proc = spawn(spec.file, spec.args, {
     cwd,
     env: {
@@ -445,7 +550,25 @@ export async function dispatchTask(
   });
   run.proc = proc;
   proc.stdin.on("error", () => {}); // 起動失敗時の EPIPE を握りつぶす
-  proc.stdin.end(buildPrompt(task, { resume: !!resumeSession }));
+  proc.stdin.end(buildPrompt(task, { resume: !!resumeSession, notionText }));
+
+  // 起動したセッションの ID が分かったらタスクに紐付ける (カードの「作業中」表示に使う)
+  const linkSession = (sessionId) => {
+    if (!sessionId || run.agentSession === sessionId) return;
+    run.agentSession = sessionId;
+    try {
+      recordTaskSession({
+        taskId: id,
+        agent,
+        sessionId,
+        cwd,
+        title: task.title,
+        transcriptPath: agent === "claude" ? claudeTranscriptPath(cwd, sessionId) : codexTranscriptPath(sessionId),
+        via: "dispatch",
+      });
+      onChange();
+    } catch {}
+  };
 
   let stderrBuf = "";
   proc.stderr.on("data", (d) => {
@@ -462,6 +585,11 @@ export async function dispatchTask(
       if (!line.trim()) continue;
       try {
         const msg = JSON.parse(line);
+        if (agent === "codex") {
+          handleCodexEvent(run, msg, linkSession);
+          continue;
+        }
+        if (msg.session_id) linkSession(msg.session_id);
         if (msg.type === "assistant") {
           const texts = (msg.message?.content || [])
             .filter((c) => c.type === "text")
@@ -489,13 +617,13 @@ export async function dispatchTask(
   run.timer.unref?.();
 
   proc.on("error", (err) => {
-    finishRun(run, `claude を起動できませんでした: ${err.message}`, onChange);
+    finishRun(run, `${agent} を起動できませんでした: ${err.message}`, onChange);
   });
   const onEnd = (code) => {
     let error = run.error;
     if (!error && code !== 0) {
       const tail = stderrBuf.trim().slice(-500);
-      error = `claude が異常終了しました (exit ${code ?? "?"})${tail ? `: ${tail}` : ""}`;
+      error = `${agent} が異常終了しました (exit ${code ?? "?"})${tail ? `: ${tail}` : ""}`;
     }
     finishRun(run, error, onChange);
   };
@@ -508,4 +636,23 @@ export async function dispatchTask(
 
   onChange();
   return publicRun(run);
+}
+
+// codex exec --json のイベント (JSONL)。形式はバージョンで揺れるので、知っている形だけ拾う
+function handleCodexEvent(run, msg, linkSession) {
+  const type = msg.type || msg.msg?.type;
+  if (type === "thread.started" || type === "session.created" || type === "session_configured") {
+    linkSession(msg.thread_id || msg.session_id || msg.msg?.session_id);
+    return;
+  }
+  const item = msg.item;
+  if (item && (item.type === "agent_message" || item.item_type === "assistant_message") && item.text) {
+    run.lastText = String(item.text).slice(-2000);
+    run.resultText = String(item.text).slice(0, 8000);
+    return;
+  }
+  if (type === "turn.failed" || type === "error") {
+    const m = msg.error?.message || msg.message || "codex がエラーで終了しました";
+    if (!run.error) run.error = String(m).slice(0, 2000);
+  }
 }
