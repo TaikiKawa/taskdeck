@@ -1,6 +1,7 @@
 # taskdeck
 
 人間とAIコーディングエージェント（Claude Code / Codex など）が同じボードを共有する、完全ローカルのミニマルなカンバン。
+Notion のタスクデータベース（自分が担当の行だけ）も同じボードに同期して、Claude / Codex にそのまま依頼できる。
 
 - **保存先**: SQLite 1ファイル（`~/.taskdeck/tasks.db`）
 - **人間側**: ドラッグ＆ドロップのカンバンUI（`http://localhost:4747`）
@@ -116,6 +117,7 @@ powershell -ExecutionPolicy Bypass -File windows\install.ps1   # npm install + �
 |---|---|
 | `task_add` | タスク追加（複数可、`project` でグループ指定） |
 | `task_list` | 未完了タスク一覧（project/status/session で絞り込み） |
+| `task_start` | 着手を知らせる（doing にし、呼び出し元の AI セッションをタスクに紐付ける） |
 | `task_update` | ステータス変更・タイトル/メモ/プロジェクト編集 |
 | `task_done` | 完了にする（複数可） |
 | `task_delete` | 削除 |
@@ -127,17 +129,75 @@ powershell -ExecutionPolicy Bypass -File windows\install.ps1   # npm install + �
 ```markdown
 ## タスク管理
 - このマシンには taskdeck MCP がある。project 名にはレポジトリ名を使うこと。
-- セッション開始時に `task_list` で未完了タスクを確認する。
+- セッション開始時に `task_list` で未完了タスクを確認する。`working_in` が空でないタスクは
+  別の AI セッションが作業中なので、頼まれない限り手を出さない。
 - 作業中に気づいた改善点・セキュリティリスク・フォローアップは、
   その場で `task_add` に登録してから作業を続ける。
-- 着手したら `task_update` で status を doing に、完了したら `task_done`。
+- ボードのタスクに着手したら `task_start`、完了したら `task_done`。
 ```
 
-## タスクをボタンひとつで Claude Code に任せる
+Codex には同じ内容を `~/.codex/AGENTS.md`（またはリポジトリの `AGENTS.md`）に書く。
 
-カードの 🤖 ボタン（または詳細パネルの「🤖 Claudeに依頼」）から、そのタスクを Claude に依頼できる。
+## Notion のデータベースを同期する
 
-実行先は3つ:
+ヘッダーの **N Notion** ボタンから、Notion のデータベースのリンクを追加すると、
+**担当者のプロパティに自分が入っている行だけ**をボードに表示し、以後 1 分ごとに同期し続ける。
+
+1. Notion の「設定 → コネクト → インテグレーションを作成または管理」で**内部インテグレーション**を作り、
+   トークンをダイアログに貼る（`~/.taskdeck/notion.json` にパーミッション 600 で保存。環境変数 `TASKDECK_NOTION_TOKEN` でも可）
+2. 同期したいデータベースの「…」→「コネクト」で、そのインテグレーションを追加する
+3. データベースのリンクを貼って「読み込む」→ 担当者のプロパティ・自分・ステータスのプロパティ・グループ分けを選んで「追加して同期」
+
+- **プロパティは Notion のものをそのまま使う**。カードには Notion のステータス名（例: 「レビュー中」）が出る。
+  ボードの列（Todo / Doing / Done）は、ステータス型ならグループ（To-do / In progress / Complete）、
+  セレクト型なら名前から割り当てる
+- ボードで列を移動・タイトルを変更すると **Notion に書き戻す**。同じ列に属するステータス同士
+  （「進行中」と「レビュー中」など）の間では書き換えない。書き戻しに失敗したらボードも変えずにエラーを出す
+- AI が MCP の `task_start` / `task_done` を呼んだときも同じように Notion のステータスが変わる
+- メモ欄は taskdeck 内だけ（Notion には送らない）。AI の実行ログもここに残る。グループは Notion のプロパティで決まるので編集不可。
+  Notion のタスクはボードから削除できない（Notion 側で削除・担当解除すると次の同期で消える）
+- 完了したタスクは直近 14 日に更新されたものだけ表示する。担当外れ・削除の反映は 10 分ごとの全件同期で行う
+- 🤖 で依頼すると、Notion ページの本文（先頭 100 ブロック）と URL がプロンプトに入る
+- 詳細パネルに Notion の**プロパティ**（リレーションはリンク）と**本文**を表示する。「表示を編集」で
+  表示するプロパティ・カードにも出すか・順番を同期元ごとに選べる（既定はシステム系以外すべて、カードには日付）
+- 「あなた」はインテグレーションに「ユーザー情報」の権限が無くても、自分の Notion ユーザー ID を直接入力すれば選べる
+  （名前の一覧を taskdeck に渡さずに済む）。追加画面で取り込まれる件数と内訳をプレビューできる
+- ヘッダーの「更新」で今すぐ全件同期する（自動同期は差分が 1 分ごと、全件が 10 分ごと）
+
+## グループの名前変更・削除
+
+グループを選ぶとヘッダーに「名前を変更」「グループを削除」が出る。
+
+- **名前を変更**: 既にある名前にするとそのグループにまとめる。Notion から来たグループは taskdeck 上の表示名だけが変わり、
+  「元の名前 → 新しい名前」を記録して次の同期以降も新しい名前を使う（元の名前に戻すと記録は消える）
+- **グループを削除**: グループをタスクごと削除する（元に戻せない）。Notion のタスクと実行中のタスクは残す
+
+## どの AI がどこで作業しているかを見る
+
+タスクと AI セッション（Claude Code / Codex）の紐付けを 3 つの経路で集め、カードに
+「● Claude 作業中」「Codex 3時間前」のように出す。詳細パネルの「AI セッション」には、
+セッションごとの作業ディレクトリ・再開コマンド（`claude --resume …` / `codex resume …`）・
+「続きで依頼」ボタンが並ぶ。
+
+1. **AI からの通知**: MCP の `task_start`（または `task_update` で doing）を呼んだセッションを記録する
+2. **🤖 から起動**: バックグラウンド実行で起動したセッションを記録する
+3. **会話ログのスキャン**: サーバーが 30 秒ごとに `~/.claude/projects/**/*.jsonl` と `~/.codex/sessions/**/*.jsonl`
+   の追記分を読み、次のどれかがあるセッションを紐付ける（直近 48 時間ぶん）
+   - taskdeck MCP の `task_start` / `task_update` / `task_done` の呼び出し
+   - プロンプト中の `taskdeck ID: 12`・`#12 のタスク`・`タスク #12`
+   - プロンプト中の、同期している Notion ページの URL
+   ツールの出力（`task_list` の結果など）は読まないので、一覧を見ただけでは紐付かない。
+   デスクトップアプリで開いたセッションや、AI が `task_start` を呼び忘れたセッションもこれで拾える
+
+会話ログが 10 分以内に更新されていれば「作業中」とみなす。MCP の `task_list` も `working_in` に
+作業中のセッションを返すので、別の AI が同じタスクに重ねて着手しにくくなる。
+
+
+## タスクをボタンひとつで Claude Code / Codex に任せる
+
+カードの 🤖 ボタン（または詳細パネルの「AI に依頼」）から、そのタスクを Claude か Codex に依頼できる。
+
+実行先は4つ:
 
 - **デスクトップアプリで開く — Claude Code**（デフォルト）: `claude://code/new` ディープリンクで、
   タスク内容と作業フォルダが入った新規セッションがデスクトップアプリに開く。
@@ -146,6 +206,10 @@ powershell -ExecutionPolicy Bypass -File windows\install.ps1   # npm install + �
 - **バックグラウンドで実行 — claude CLI**: `claude -p` をヘッドレス起動して全自動実行。
   進捗バッジ・停止・実行ログのメモ追記・`--resume` はこのモードのみ。
   ターミナルで `claude /login` 済みであること（`claude setup-token` なら切れにくい）
+- **バックグラウンドで実行 — Codex CLI**: `codex exec --json` をヘッドレス起動して全自動実行。
+  安全モードは `-s workspace-write`、全自動は `--dangerously-bypass-approvals-and-sandbox`。
+  codex は ChatGPT アプリ同梱のもの（`/Applications/ChatGPT.app/Contents/Resources/codex-cli/bin/codex`）などを自動検出する。
+  ChatGPT にログイン済みであること。登録元セッションの続き（resume）には未対応
 
 1. カードにホバー → 🤖 をクリック
 2. 作業ディレクトリ（そのプロジェクトのリポジトリ）を指定
@@ -214,3 +278,9 @@ git tag v0.1.0 && git push origin v0.1.0
 - `TASKDECK_REPO_ROOTS` — リポジトリ推測の探索先。区切りは PATH と同じ（macOS/Linux はコロン `~/dev:~`、
   Windows はセミコロン `C:\dev;%USERPROFILE%`）。デフォルトは `~/dev` と `~`。`~\dev` のような Windows 形式も可
 - `TASKDECK_NODE` — アプリ起動時に使う node のパス（macOS の `.app` / Windows の `taskdeck.ps1` が参照）
+- `TASKDECK_CODEX` — codex CLI のパス（未設定なら自動検出）
+- `TASKDECK_NOTION_TOKEN` — Notion インテグレーションのトークン（未設定なら `~/.taskdeck/notion.json`）
+- `TASKDECK_NOTION_SYNC_MS` — Notion の差分同期の間隔（デフォルト 60 秒、`0` で無効）
+- `TASKDECK_SCAN_MS` — 会話ログのスキャン間隔（デフォルト 30 秒、`0` で無効）
+- `TASKDECK_CLAUDE_PROJECTS` / `TASKDECK_CODEX_SESSIONS` — スキャンする会話ログの場所
+  （デフォルト `~/.claude/projects` / `~/.codex/sessions`）

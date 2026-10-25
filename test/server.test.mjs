@@ -42,7 +42,7 @@ const task = JSON.stringify({ title: "test task", project: "test" });
 
 before(async () => {
   server = spawn(process.execPath, [join(root, "src", "server.js")], {
-    env: { ...process.env, TASKDECK_PORT: String(PORT), TASKDECK_DIR: dataDir },
+    env: { ...process.env, TASKDECK_PORT: String(PORT), TASKDECK_DIR: dataDir, TASKDECK_SCAN_MS: "0", TASKDECK_NOTION_SYNC_MS: "0" },
     stdio: ["ignore", "ignore", "inherit"],
   });
   for (let i = 0; i < 80; i++) {

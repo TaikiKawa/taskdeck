@@ -8,39 +8,61 @@ import {
   deleteTask,
   getTask,
   listProjects,
+  listTaskSessions,
   listTasks,
-  updateTask,
+  recordTaskSession,
 } from "./db.js";
 import { maybeRegisterProjectPath } from "./dispatch.js";
-import { readdirSync, statSync } from "node:fs";
-import { homedir } from "node:os";
-import { join } from "node:path";
+import { updateTaskSynced } from "./notion.js";
+import {
+  claudeTranscriptPath,
+  detectClaudeSession,
+  detectCodexSession,
+  withActivity,
+} from "./sessions.js";
 
-// 呼び出し元の Claude セッションIDを検出する。
-// このMCPサーバーはセッションの作業ディレクトリで起動されるため、
-// ~/.claude/projects/<dir> 直下で直近更新されたトランスクリプト(.jsonl)の
-// ファイル名 = 今まさに動いているセッションのUUID とみなす。
-function detectClaudeSession(cwd) {
-  if (process.env.CLAUDE_SESSION_ID) return process.env.CLAUDE_SESSION_ID;
-  try {
-    // Claude Code は cwd の英数字以外を "-" に置換したディレクトリ名を使う。
-    // Windows でも同じ規則で、"C:\Users\taiki\dev\taskdeck" は
-    // "C--Users-taiki-dev-taskdeck" になる (":" と "\" がそれぞれ "-")。
-    // process.cwd() は Windows でバックスラッシュ区切りを返すのでそのまま置換すればよい。
-    const dir = join(homedir(), ".claude", "projects", cwd.replace(/[^a-zA-Z0-9]/g, "-"));
-    const latest = readdirSync(dir)
-      .filter((f) => f.endsWith(".jsonl"))
-      .map((f) => ({ f, m: statSync(join(dir, f)).mtimeMs }))
-      .sort((a, b) => b.m - a.m)[0];
-    // 直近5分以内に動いているものだけ「呼び出し元」とみなす
-    if (!latest || Date.now() - latest.m > 5 * 60 * 1000) return null;
-    return latest.f.replace(/\.jsonl$/, "");
-  } catch {
-    return null;
-  }
+const server = new McpServer({ name: "taskdeck", version: "0.3.0" });
+
+// 呼び出し元のハーネス。MCP の initialize で送られてくる clientInfo.name で見分ける
+function callerAgent() {
+  const name = server.server.getClientVersion()?.name || "";
+  if (/codex/i.test(name)) return "codex";
+  if (/claude/i.test(name)) return "claude";
+  return process.env.CODEX_HOME || process.env.CODEX_SANDBOX ? "codex" : "claude";
 }
 
-const server = new McpServer({ name: "taskdeck", version: "0.1.0" });
+// 呼び出し元セッションをタスクに紐付ける(見つからなければ何もしない。
+// 会話ログのスキャンでも後から紐付くので、ここは早めに表示するためのもの)
+function linkCallerSession(taskId) {
+  const cwd = process.cwd();
+  const agent = callerAgent();
+  if (agent === "codex") {
+    const found = detectCodexSession(cwd);
+    if (!found) return null;
+    return recordTaskSession({ taskId, agent, sessionId: found.sessionId, cwd: found.cwd || cwd, transcriptPath: found.transcriptPath, via: "mcp" });
+  }
+  const sessionId = detectClaudeSession(cwd);
+  if (!sessionId) return null;
+  return recordTaskSession({ taskId, agent, sessionId, cwd, transcriptPath: claudeTranscriptPath(cwd, sessionId), via: "mcp" });
+}
+
+// AI に返すタスク。紐付いたセッションのうち作業中のものを working_in に出し、
+// 他のエージェントがすでに手を付けているか分かるようにする
+function view(task) {
+  if (!task) return task;
+  const sessions = withActivity(listTaskSessions(task.id));
+  const out = { ...task };
+  if (!out.notion_page_id) {
+    delete out.notion_page_id; delete out.notion_url; delete out.notion_source_id; delete out.external_status;
+  }
+  if (sessions.length) {
+    out.sessions = sessions.slice(0, 5).map((s) => ({
+      agent: s.agent, session_id: s.session_id, cwd: s.cwd, active: s.active, last_activity_at: s.last_activity_at,
+    }));
+    out.working_in = out.sessions.filter((s) => s.active);
+  }
+  return out;
+}
 
 const json = (value) => ({
   content: [{ type: "text", text: JSON.stringify(value, null, 2) }],
@@ -85,7 +107,7 @@ server.tool(
 
 server.tool(
   "task_list",
-  "List tasks on the board. Call at the start of a session (filtered by project) to see open work.",
+  "List tasks on the board (local tasks and tasks synced from the user's Notion databases). Call at the start of a session (filtered by project) to see open work. A task whose working_in is non-empty is already being worked on in another live agent session; do not start it unless the user asks.",
   {
     project: z.string().optional(),
     status: statusEnum.optional(),
@@ -93,12 +115,33 @@ server.tool(
     include_done: z.boolean().optional().describe("Default false: hide completed tasks"),
   },
   async ({ project, status, session, include_done }) =>
-    json(listTasks({ project, status, session, includeDone: include_done ?? false }))
+    json(listTasks({ project, status, session, includeDone: include_done ?? false }).map(view))
+);
+
+server.tool(
+  "task_start",
+  "Tell the board you are starting work on a task now. Marks it 'doing' (also in Notion for Notion tasks) and links this agent session to the task so humans can see which AI is working on it and where. Call this before you start working on any board task.",
+  {
+    id: z.number().int(),
+  },
+  async ({ id }) => {
+    const task = getTask(id);
+    if (!task) throw new Error(`task ${id} not found`);
+    const session = linkCallerSession(id);
+    let warning;
+    let updated = task;
+    try {
+      updated = await updateTaskSynced(id, { status: "doing" });
+    } catch (err) {
+      warning = `ステータスを Notion に書き戻せませんでした: ${err.message}`;
+    }
+    return json({ task: view(updated), session, ...(warning ? { warning } : {}) });
+  }
 );
 
 server.tool(
   "task_update",
-  "Update a task: change status (todo/doing/done), title, notes, project, or priority. Set status 'doing' when starting work, 'done' when finished.",
+  "Update a task: change status (todo/doing/done), title, notes, project, or priority. Prefer task_start when starting work, 'done' when finished.",
   {
     id: z.number().int(),
     title: z.string().optional(),
@@ -107,14 +150,24 @@ server.tool(
     project: z.string().optional(),
     priority: priorityEnum.optional().describe("'' clears the priority"),
   },
-  async ({ id, ...fields }) => json(updateTask(id, fields))
+  async ({ id, ...fields }) => {
+    if (fields.status === "doing") linkCallerSession(id);
+    return json(view(await updateTaskSynced(id, fields)));
+  }
 );
 
 server.tool(
   "task_done",
   "Mark one or more tasks as done.",
   { ids: z.array(z.number().int()).min(1) },
-  async ({ ids }) => json(ids.map((id) => updateTask(id, { status: "done" })))
+  async ({ ids }) => {
+    const done = [];
+    for (const id of ids) {
+      linkCallerSession(id);
+      done.push(view(await updateTaskSynced(id, { status: "done" })));
+    }
+    return json(done);
+  }
 );
 
 server.tool(
@@ -123,6 +176,7 @@ server.tool(
   { id: z.number().int() },
   async ({ id }) => {
     const task = getTask(id);
+    if (task?.notion_page_id) throw new Error("Notion のタスクは削除できません。完了にするなら task_done を使ってください");
     const removed = deleteTask(id);
     return json({ removed, task: task ?? null });
   }
